@@ -1,0 +1,6 @@
+build
+**/export.h
+
+.vs
+.cache
+.vscode
