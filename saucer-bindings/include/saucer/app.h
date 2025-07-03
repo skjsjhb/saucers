@@ -38,6 +38,26 @@ extern "C"
     typedef void (*saucer_post_callback)();
     SAUCER_EXPORT void saucer_application_post(saucer_application *, saucer_post_callback callback);
 
+    // == Rust Interop ==
+    // The following functions allows to pass an argument, which is needed to pass Rust closures.
+
+    typedef void (*saucer_pool_callback_with_arg)(void *);
+
+    SAUCER_EXPORT void saucer_application_pool_submit_with_arg(saucer_application *,
+                                                               saucer_pool_callback_with_arg callback, void *arg);
+
+    SAUCER_EXPORT void saucer_application_pool_emplace_with_arg(saucer_application *,
+                                                                saucer_pool_callback_with_arg callback, void *arg);
+
+    typedef void (*saucer_post_callback_with_arg)(void *);
+
+    /**
+     * @brief Similar to `saucer_application_post`, but allows to pass an argument.
+     * This is needed for Rust closures to be passed and executed safely.
+     */
+    SAUCER_EXPORT void saucer_application_post_with_arg(saucer_application *, saucer_post_callback_with_arg callback,
+                                                        void *arg);
+
     SAUCER_EXPORT void saucer_application_quit(saucer_application *);
 
     SAUCER_EXPORT void saucer_application_run(saucer_application *);

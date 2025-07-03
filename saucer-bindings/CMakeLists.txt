@@ -6,7 +6,7 @@ project(saucer-bindings LANGUAGES CXX VERSION 5.0.0)
 # --------------------------------------------------------------------------------------------------------
 
 option(saucer_desktop "Enable support for the desktop module" ON)
-option(saucer_pdf     "Enable support for the pdf module"     ON)
+option(saucer_pdf "Enable support for the pdf module" ON)
 
 # --------------------------------------------------------------------------------------------------------
 # CMake options
@@ -26,11 +26,11 @@ set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 23 CXX_EXTENSIONS 
 
 if (PROJECT_IS_TOP_LEVEL AND NOT MSVC AND NOT CMAKE_CXX_SIMULATE_ID MATCHES "MSVC")
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic -Werror -pedantic -pedantic-errors -Wfatal-errors)
-endif()
+endif ()
 
 if (NOT MSVC)
-  target_compile_options(${PROJECT_NAME} PRIVATE -Wno-unknown-warning-option -Wno-missing-field-initializers -Wno-cast-function-type)
-endif()
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wno-unknown-warning-option -Wno-missing-field-initializers -Wno-cast-function-type)
+endif ()
 
 # --------------------------------------------------------------------------------------------------------
 # Export header
@@ -46,29 +46,29 @@ saucer_bindings_export(${PROJECT_NAME} "SAUCER_EXPORT")
 # Include directories
 # --------------------------------------------------------------------------------------------------------
 
-target_include_directories(${PROJECT_NAME} PUBLIC  "include")
+target_include_directories(${PROJECT_NAME} PUBLIC "include")
 target_include_directories(${PROJECT_NAME} PRIVATE "include/saucer" "private")
 
 # --------------------------------------------------------------------------------------------------------
 # Add Sources
 # --------------------------------------------------------------------------------------------------------
 
-target_sources(${PROJECT_NAME} PRIVATE 
-    "src/app.cpp"
-    "src/options.cpp"
-    
-    "src/memory.cpp"
-    
-    "src/icon.cpp"
-    "src/stash.cpp"
-    "src/script.cpp"
-    "src/scheme.cpp"
+target_sources(${PROJECT_NAME} PRIVATE
+        "src/app.cpp"
+        "src/options.cpp"
 
-    "src/navigation.cpp"
-    "src/preferences.cpp"
-    
-    "src/window.cpp"
-    "src/webview.cpp"
+        "src/memory.cpp"
+
+        "src/icon.cpp"
+        "src/stash.cpp"
+        "src/script.cpp"
+        "src/scheme.cpp"
+
+        "src/navigation.cpp"
+        "src/preferences.cpp"
+
+        "src/window.cpp"
+        "src/webview.cpp"
 )
 
 # --------------------------------------------------------------------------------------------------------
@@ -78,10 +78,10 @@ target_sources(${PROJECT_NAME} PRIVATE
 include("cmake/cpm.cmake")
 
 CPMFindPackage(
-  NAME           saucer
-  VERSION        6.0.0
-  GIT_REPOSITORY "https://github.com/saucer/saucer"
-  OPTIONS        "saucer_static OFF" "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON"
+        NAME saucer
+        VERSION 6.0.0
+        GIT_REPOSITORY "https://github.com/saucer/saucer"
+        OPTIONS "saucer_static ON" "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON"
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC saucer::saucer)
@@ -93,9 +93,16 @@ target_link_libraries(${PROJECT_NAME} PUBLIC saucer::saucer)
 include("cmake/module.cmake")
 
 if (saucer_desktop)
-  add_subdirectory("modules/desktop")
-endif()
+    add_subdirectory("modules/desktop")
+endif ()
 
 if (saucer_pdf)
-  add_subdirectory("modules/pdf")
-endif()
+    add_subdirectory("modules/pdf")
+endif ()
+
+install(
+        TARGETS ${PROJECT_NAME}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)

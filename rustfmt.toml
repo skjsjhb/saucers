@@ -1,0 +1,9 @@
+max_width = 120
+imports_granularity = "Item"
+group_imports = "StdExternalCrate"
+combine_control_expr = false
+trailing_comma = "Never"
+fn_single_line = true
+where_single_line = true
+use_field_init_shorthand = true
+condense_wildcard_suffixes = true

@@ -60,10 +60,15 @@ namespace bindings
     struct wrap<std::function<R(Ts...)>>
     {
         using type = wrap<R>::type (*)(saucer_handle *, typename wrap<Ts>::type...);
+        using type_with_arg = wrap<R>::type (*)(saucer_handle *, void *, typename wrap<Ts>::type...);
 
         static auto convert(void *callback)
         {
             return reinterpret_cast<type>(callback);
+        }
+
+        static auto convert_with_arg(void *callback) {
+            return reinterpret_cast<type_with_arg>(callback);
         }
     };
 
@@ -74,6 +79,14 @@ namespace bindings
         {
             auto *converted = wrap<T>::convert(callback);
             return std::invoke(converted, handle, wrap<Ts>::convert(args)...);
+        };
+    };
+
+    template<typename T>
+    T callback_with_arg(saucer_handle *handle, void *callback, void *arg) {
+        return [handle, callback, arg]<typename... Ts>(Ts &&... args) {
+            auto *converted = wrap<T>::convert_with_arg(callback);
+            return std::invoke(converted, handle, arg, wrap<Ts>::convert(args)...);
         };
     };
 } // namespace bindings

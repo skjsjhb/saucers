@@ -48,6 +48,11 @@ extern "C"
     typedef bool (*saucer_on_message)(const char *);
     SAUCER_EXPORT void saucer_webview_on_message(saucer_handle *, saucer_on_message callback);
 
+    typedef bool (*saucer_on_message_with_arg)(const char *, void *);
+
+    SAUCER_EXPORT void saucer_webview_on_message_with_arg(saucer_handle *, saucer_on_message_with_arg callback,
+                                                          void *arg);
+
     /*[[sc::requires_free]]*/ SAUCER_EXPORT saucer_icon *saucer_webview_favicon(saucer_handle *);
     /*[[sc::requires_free]]*/ SAUCER_EXPORT char *saucer_webview_page_title(saucer_handle *);
 
@@ -102,7 +107,14 @@ extern "C"
      */
 
     SAUCER_EXPORT void saucer_webview_once(saucer_handle *, SAUCER_WEB_EVENT event, void *callback);
+
+    SAUCER_EXPORT void saucer_webview_once_with_arg(saucer_handle *, SAUCER_WEB_EVENT event, void *callback, void *arg);
+
     SAUCER_EXPORT uint64_t saucer_webview_on(saucer_handle *, SAUCER_WEB_EVENT event, void *callback);
+
+    SAUCER_EXPORT uint64_t saucer_webview_on_with_arg(saucer_handle *, SAUCER_WEB_EVENT event, void *callback,
+                                                      void *arg);
+
 
     /*[[sc::before_init]]*/ SAUCER_EXPORT void saucer_register_scheme(const char *name);
 

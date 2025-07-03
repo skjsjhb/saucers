@@ -40,6 +40,21 @@ extern "C"
         handle->value()->post(callback);
     }
 
+    void saucer_application_pool_submit_with_arg(saucer_application *handle, saucer_pool_callback_with_arg callback,
+                                                 void *arg) {
+        handle->value()->pool().submit([=] { callback(arg); }).get();
+    }
+
+    void saucer_application_pool_emplace_with_arg(saucer_application *handle, saucer_pool_callback_with_arg callback,
+                                                  void *arg) {
+        handle->value()->pool().emplace([=] { callback(arg); });
+    }
+
+    void saucer_application_post_with_arg(saucer_application *handle, saucer_post_callback_with_arg callback,
+                                          void *arg) {
+        handle->value()->post([=] { callback(arg); });
+    }
+
     void saucer_application_quit(saucer_application *handle)
     {
         handle->value()->quit();

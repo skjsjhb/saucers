@@ -7,8 +7,10 @@
 struct saucer_handle : saucer::webview
 {
     saucer_on_message m_on_message{};
+    saucer_on_message_with_arg m_on_message_with_arg{};
+    void *m_on_message_arg = nullptr;
 
-  public:
+public:
     using saucer::webview::webview;
 
   public:
@@ -19,11 +21,14 @@ struct saucer_handle : saucer::webview
             return true;
         }
 
-        if (!m_on_message)
-        {
-            return false;
+        if (m_on_message) {
+            return m_on_message(message.c_str());
         }
 
-        return m_on_message(message.c_str());
+        if (m_on_message_with_arg && m_on_message_arg) {
+            return m_on_message_with_arg(message.c_str(), m_on_message_arg);
+        }
+
+        return false;
     }
 };

@@ -43,6 +43,11 @@ extern "C"
         handle->m_on_message = callback;
     }
 
+    void saucer_webview_on_message_with_arg(saucer_handle *handle, saucer_on_message_with_arg callback, void *arg) {
+        handle->m_on_message_with_arg = callback;
+        handle->m_on_message_arg = arg;
+    }
+
     saucer_icon *saucer_webview_favicon(saucer_handle *handle)
     {
         return saucer_icon::from(handle->favicon());
@@ -243,6 +248,62 @@ extern "C"
         case SAUCER_WEB_EVENT_LOAD:
             return handle->on<web_event::load>( //
                 bindings::callback<events::type<web_event::load>>(handle, callback));
+        }
+
+        std::unreachable();
+    }
+
+    void saucer_webview_once_with_arg(saucer_handle *handle, SAUCER_WEB_EVENT event, void *callback, void *arg) {
+        using saucer::web_event;
+        using events = saucer::webview::events;
+
+        switch (event) {
+            case SAUCER_WEB_EVENT_DOM_READY:
+                return handle->once<web_event::dom_ready>(
+                    bindings::callback_with_arg<events::type<web_event::dom_ready> >(handle, callback, arg));
+            case SAUCER_WEB_EVENT_NAVIGATED:
+                return handle->once<web_event::navigated>(
+                    bindings::callback_with_arg<events::type<web_event::navigated> >(handle, callback, arg));
+            case SAUCER_WEB_EVENT_NAVIGATE:
+                return handle->once<web_event::navigate>(
+                    bindings::callback_with_arg<events::type<web_event::navigate> >(handle, callback, arg));
+            case SAUCER_WEB_EVENT_FAVICON:
+                return handle->once<web_event::favicon>(
+                    bindings::callback_with_arg<events::type<web_event::favicon> >(handle, callback, arg));
+            case SAUCER_WEB_EVENT_TITLE:
+                return handle->once<web_event::title>( //
+                    bindings::callback_with_arg<events::type<web_event::title> >(handle, callback, arg));
+            case SAUCER_WEB_EVENT_LOAD:
+                return handle->once<web_event::load>( //
+                    bindings::callback_with_arg<events::type<web_event::load> >(handle, callback, arg));
+        }
+
+        std::unreachable();
+    }
+
+    uint64_t saucer_webview_on_with_arg(saucer_handle *handle, SAUCER_WEB_EVENT event, void *callback, void *arg) {
+        using saucer::web_event;
+        using events = saucer::webview::events;
+
+        switch (event) {
+            case SAUCER_WEB_EVENT_DOM_READY:
+                return handle->on<web_event::dom_ready>(
+                    bindings::callback_with_arg<events::type<web_event::dom_ready> >(handle, callback, arg));
+            case SAUCER_WEB_EVENT_NAVIGATED:
+                return handle->on<web_event::navigated>(
+                    bindings::callback_with_arg<events::type<web_event::navigated> >(handle, callback, arg));
+            case SAUCER_WEB_EVENT_NAVIGATE:
+                return handle->on<web_event::navigate>(
+                    bindings::callback_with_arg<events::type<web_event::navigate> >(handle, callback, arg));
+            case SAUCER_WEB_EVENT_FAVICON:
+                return handle->on<web_event::favicon>(
+                    bindings::callback_with_arg<events::type<web_event::favicon> >(handle, callback, arg));
+            case SAUCER_WEB_EVENT_TITLE:
+                return handle->on<web_event::title>(
+                    bindings::callback_with_arg<events::type<web_event::title> >(handle, callback, arg));
+            case SAUCER_WEB_EVENT_LOAD:
+                return handle->on<web_event::load>(
+                    bindings::callback_with_arg<events::type<web_event::load> >(handle, callback, arg));
         }
 
         std::unreachable();
