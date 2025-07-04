@@ -7,4 +7,3 @@ pub mod app;
 mod capi;
 pub mod options;
 pub mod prefs;
-pub mod webview;

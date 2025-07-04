@@ -1,13 +1,14 @@
-use crate::app::App;
-use crate::capi::*;
 use std::ffi::CString;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
+use crate::app::App;
+use crate::capi::*;
+
 pub struct Preferences {
     inner: NonNull<saucer_preferences>,
     app: App, // Keeps the app pointer alive during its lifetime
-    _owns: PhantomData<saucer_preferences>,
+    _owns: PhantomData<saucer_preferences>
 }
 
 unsafe impl Send for Preferences {}
@@ -24,16 +25,18 @@ impl Drop for Preferences {
 impl Preferences {
     /// Creates a new preferences set for the specified app.
     pub fn new(app: &App) -> Self {
+        let (app_ptr, _guard) = app.get_ptr();
+
         let p = unsafe {
             // SAFETY: The preferences is later passed to a webview window which (we believe) will use the pointer
             // safely, due to the fact that multiple webviews can be created from one app (in the C++ API).
-            saucer_preferences_new(app.as_ptr())
+            saucer_preferences_new(app_ptr.as_ptr())
         };
 
         Self {
             inner: NonNull::new(p).expect("Failed to create preferences"),
             app: app.clone(),
-            _owns: PhantomData,
+            _owns: PhantomData
         }
     }
 
@@ -76,12 +79,8 @@ impl Preferences {
     }
 
     /// SAFETY: The user must not mutate the returned pointer when it's being used by a webview.
-    pub(crate) unsafe fn as_ptr(&self) -> *mut saucer_preferences {
-        self.inner.as_ptr()
-    }
+    pub(crate) unsafe fn as_ptr(&self) -> *mut saucer_preferences { self.inner.as_ptr() }
 
     /// Clones an [`App`] and returns it.
-    pub(crate) fn get_shared_app(&self) -> App {
-        self.app.clone()
-    }
+    pub(crate) fn get_shared_app(&self) -> App { self.app.clone() }
 }

@@ -6,3 +6,9 @@ edition = "2024"
 [build-dependencies]
 bindgen = "0.72.0"
 cmake = "0.1"
+
+[lib]
+bench = false
+
+[dependencies]
+oneshot = { version = "0.1.11", default-features = false, features = ["std"] }
