@@ -1,231 +1,144 @@
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
-use std::sync::atomic::AtomicU32;
-use std::sync::atomic::Ordering;
+use std::sync::mpmc::Sender;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::RwLockReadGuard;
+use std::sync::Weak;
+use std::thread::ThreadId;
 
 use crate::capi::*;
+use crate::collector::Collect;
+use crate::collector::Collector;
+use crate::collector::UnsafeCollector;
 use crate::options::AppOptions;
 
-#[derive(Copy, Clone)]
-pub(crate) struct AppPtr(NonNull<saucer_application>);
-
-impl AppPtr {
-    pub(crate) fn as_ptr(self) -> *mut saucer_application { self.0.as_ptr() }
+struct AppPtr {
+    ptr: Arc<RwLock<Option<NonNull<saucer_application>>>>,
+    _owns: PhantomData<saucer_application>,
+    _counter: Arc<()>
 }
 
-/// SAFETY: Simply moving/sharing the pointer itself around is safe (that's what happens in the C++ library).
 unsafe impl Send for AppPtr {}
 unsafe impl Sync for AppPtr {}
 
-pub struct App {
-    inner: Arc<RwLock<Option<AppPtr>>>,
-    counter: Arc<AtomicU32>,
-    options: Arc<AppOptions>,
-    _no_send: PhantomData<*const ()>
+impl AppPtr {
+    fn as_ptr(&self) -> *mut saucer_application { self.ptr.read().unwrap().unwrap().as_ptr() }
 }
 
-impl Drop for App {
+impl Collect for AppPtr {
+    fn collect(self: Box<Self>) {
+        unsafe {
+            let mut guard = self.ptr.write().unwrap();
+            if let Some(ref ptr) = guard.take() {
+                saucer_application_free(ptr.as_ptr())
+            }
+        }
+    }
+}
+
+struct UnsafeApp {
+    ptr: Option<AppPtr>,
+    collector: Option<Weak<UnsafeCollector>>,
+    collector_tx: Sender<Box<dyn Collect>>,
+    host_thread: ThreadId,
+    _opt: AppOptions
+}
+
+impl Drop for UnsafeApp {
     fn drop(&mut self) {
-        // The atomic is only used on the event thread, so `Relaxed` is already sufficient.
-        if self.counter.fetch_sub(1, Ordering::Relaxed) > 1 {
+        let bb = Box::new(self.ptr.take().unwrap());
+
+        if self.is_host_thread() {
+            bb.collect();
             return;
         }
 
-        let mut ptr = self.inner.write().unwrap();
-        let cpt = ptr
-            .take()
-            .expect("App pointer must not be taken outside the event thread");
+        let ptr = bb.ptr.clone();
+        self.collector_tx.send(bb).unwrap();
+        let wk = self.collector.take().unwrap();
 
-        unsafe {
-            // SAFETY: The DTOR is only called on the event thread as `App` can't be moved.
-            saucer_application_free(cpt.as_ptr());
+        // It's possible that the collector free the pointer before posting, so a read lock is required.
+        // The dropping process acquires a write lock, so if the `ptr` is `Some`, it must be valid.
+        let guard = ptr.read().unwrap();
+        if let Some(ref ptr) = *guard {
+            Self::post_raw(ptr.as_ptr(), move || {
+                wk.upgrade().expect("Collector dropped before app is freed").collect()
+            });
         }
     }
 }
 
-impl Clone for App {
-    fn clone(&self) -> Self {
-        self.counter.fetch_add(1, Ordering::Relaxed);
-
-        Self {
-            inner: self.inner.clone(),
-            counter: self.counter.clone(),
-            options: self.options.clone(),
-            _no_send: PhantomData
-        }
-    }
-}
-
-impl App {
-    /// Creates a new app with given options.
-    pub fn new(mut opt: AppOptions) -> Self {
+impl UnsafeApp {
+    fn new(collector: Arc<UnsafeCollector>, mut opt: AppOptions) -> Self {
         let ptr = unsafe { saucer_application_init(opt.as_ptr()) };
-        let ptr = NonNull::new(ptr).expect("Failed to create app");
+        let ptr = Arc::new(RwLock::new(Some(NonNull::new(ptr).expect("Failed to create app"))));
+        let ptr = AppPtr {
+            ptr,
+            _owns: PhantomData,
+            _counter: collector.count()
+        };
 
         Self {
-            inner: Arc::new(RwLock::new(Some(AppPtr(ptr)))),
-            counter: Arc::new(AtomicU32::new(1)),
-            options: Arc::new(opt),
-            _no_send: PhantomData
+            ptr: Some(ptr),
+            collector: Some(Arc::downgrade(&collector)),
+            collector_tx: collector.get_sender(),
+            host_thread: std::thread::current().id(),
+            _opt: opt
         }
     }
 
-    /// Creates a shared [`AppHandle`] to be used on other threads.
-    pub fn make_handle(&self) -> AppHandle {
-        AppHandle {
-            inner: self.inner.clone(),
-            counter: self.counter.clone(),
-            options: self.options.clone()
-        }
+    fn is_host_thread(&self) -> bool { std::thread::current().id() == self.host_thread }
+
+    fn as_ptr(&self) -> *mut saucer_application { self.ptr.as_ref().unwrap().as_ptr() }
+
+    fn post_raw(ptr: *mut saucer_application, fun: impl FnOnce() + Send + 'static) {
+        let bb = Box::new(fun) as Box<dyn FnOnce()>;
+        let cpt = Box::into_raw(Box::new(bb)) as *mut c_void;
+        unsafe { saucer_application_post_with_arg(ptr, Some(c_call_trampoline), cpt) }
     }
 
-    /// Schedules the closure to be called during the next message queue polling.
-    pub fn post(&self, fun: impl FnOnce() + 'static) {
-        let (ptr, _guard) = self.get_ptr();
-        Self::post_raw(ptr, fun);
-    }
-
-    /// Posts a closure to be executed on a background thread and waits for it to return.
-    pub fn pool_submit(&self, fun: impl FnOnce() + Send + 'static) {
-        let (ptr, _guard) = self.get_ptr();
-        Self::pool_submit_raw(ptr, fun);
-    }
-
-    /// Posts a closure to be executed on a background thread and returns immediately.
-    pub fn pool_emplace(&self, fun: impl FnOnce() + Send + 'static) {
-        let (ptr, _guard) = self.get_ptr();
-        Self::pool_emplace_raw(ptr, fun);
-    }
-
-    /// Runs the event loop (blocking).
-    pub fn run(&self) {
-        let (ptr, _guard) = self.get_ptr();
-        unsafe {
-            saucer_application_run(ptr.as_ptr());
-        }
-    }
-
-    /// Runs the event loop (non-blocking).
-    pub fn run_once(&self) {
-        let (ptr, _guard) = self.get_ptr();
-        unsafe {
-            saucer_application_run_once(ptr.as_ptr());
-        }
-    }
-
-    /// Stops the event loop after this polling.
-    pub fn quit(&self) {
-        let (ptr, _guard) = self.get_ptr();
-        unsafe {
-            saucer_application_quit(ptr.as_ptr());
-        }
-    }
-
-    fn post_raw(ptr: AppPtr, fun: impl FnOnce() + 'static) {
-        let bb: Box<dyn FnOnce() + 'static> = Box::new(fun);
-        let raw = Box::into_raw(Box::new(bb));
-        unsafe {
-            saucer_application_post_with_arg(ptr.as_ptr(), Some(c_call_trampoline), raw as *mut c_void);
-        }
-    }
-
-    fn pool_submit_raw(ptr: AppPtr, fun: impl FnOnce() + Send + 'static) {
-        let bb: Box<dyn FnOnce() + Send + 'static> = Box::new(fun);
-        let raw = Box::into_raw(Box::new(bb));
-        unsafe {
-            saucer_application_pool_submit_with_arg(ptr.as_ptr(), Some(c_call_trampoline), raw as *mut c_void);
-        }
-    }
-
-    fn pool_emplace_raw(ptr: AppPtr, fun: impl FnOnce() + Send + 'static) {
-        let bb: Box<dyn FnOnce() + Send + 'static> = Box::new(fun);
-        let raw = Box::into_raw(Box::new(bb));
-        unsafe {
-            saucer_application_pool_emplace_with_arg(ptr.as_ptr(), Some(c_call_trampoline), raw as *mut c_void);
-        }
-    }
-
-    pub(crate) fn get_ptr(&self) -> (AppPtr, RwLockReadGuard<'_, Option<AppPtr>>) {
-        let guard = self.inner.read().unwrap();
-        let ptr = guard.expect("Owned app pointer should always be valid");
-        (ptr, guard)
-    }
+    fn post(&self, fun: impl FnOnce() + Send + 'static) { Self::post_raw(self.as_ptr(), fun) }
 }
 
 #[derive(Clone)]
-pub struct AppHandle {
-    inner: Arc<RwLock<Option<AppPtr>>>,
-    counter: Arc<AtomicU32>,
-    options: Arc<AppOptions>
-}
+pub struct App(Arc<UnsafeApp>);
 
-impl AppHandle {
-    /// Checks whether this method is being called on the event thread.
-    ///
-    /// Returns `false` if the app has been dropped.
-    pub fn is_thread_safe(&self) -> bool {
-        let guard = self.inner.read().unwrap();
-        if let Some(ref ptr) = *guard {
-            unsafe { saucer_application_thread_safe(ptr.as_ptr()) }
-        } else {
-            false
-        }
+impl App {
+    pub fn new(collector: &Collector, opt: AppOptions) -> Self {
+        Self(Arc::new(UnsafeApp::new(collector.get_inner(), opt)))
     }
 
-    /// Posts a closure to be executed on the event thread.
-    /// If called on the event thread, schedules it to be called during the next message queue polling.
-    ///
-    /// Does nothing if the app has been dropped.
-    pub fn post(&self, fun: impl FnOnce() + Send + 'static) {
-        let guard = self.inner.read().unwrap();
-        if let Some(ptr) = *guard {
-            App::post_raw(ptr, fun);
-        }
-    }
+    pub fn post(&self, fun: impl FnOnce() + Send + 'static) { self.0.post(fun); }
 
-    /// Posts a closure to be executed on a background thread and waits for it to return.
-    ///
-    /// Does nothing if the app has been dropped.
+    pub fn is_thread_safe(&self) -> bool { self.0.is_host_thread() }
+
+    pub fn run(&self) { unsafe { saucer_application_run(self.0.as_ptr()) } }
+
+    pub fn run_once(&self) { unsafe { saucer_application_run_once(self.0.as_ptr()) } }
+
     pub fn pool_submit(&self, fun: impl FnOnce() + Send + 'static) {
-        let guard = self.inner.read().unwrap();
-        if let Some(ptr) = *guard {
-            App::pool_submit_raw(ptr, fun);
-        }
+        let bb = Box::new(fun) as Box<dyn FnOnce()>;
+        let ptr = Box::into_raw(Box::new(bb)) as *mut c_void;
+        unsafe { saucer_application_pool_submit_with_arg(self.0.as_ptr(), Some(c_call_trampoline), ptr) }
     }
 
-    /// Posts a closure to be executed on a background thread and returns immediately.
-    ///
-    /// Does nothing if the app has been dropped.
     pub fn pool_emplace(&self, fun: impl FnOnce() + Send + 'static) {
-        let guard = self.inner.read().unwrap();
-        if let Some(ptr) = *guard {
-            App::pool_emplace_raw(ptr, fun);
+        let bb = Box::new(fun) as Box<dyn FnOnce()>;
+        let ptr = Box::into_raw(Box::new(bb)) as *mut c_void;
+        unsafe { saucer_application_pool_emplace_with_arg(self.0.as_ptr(), Some(c_call_trampoline), ptr) }
+    }
+
+    pub fn quit(&self) {
+        if self.is_thread_safe() {
+            unsafe { saucer_application_quit(self.0.as_ptr()) }
+        } else {
+            let this = self.clone();
+            self.post(move || this.quit());
         }
     }
 
-    /// Tries to upgrade this handle to [`App`] if called on the event thread.
-    ///
-    /// When called from other threads, or the app has been dropped, returns [`None`].
-    pub fn upgrade(&self) -> Option<App> {
-        if !self.is_thread_safe() {
-            return None;
-        }
-
-        self.inner.read().unwrap().map(|_| {
-            // This is only called on the event thread (checked above).
-            self.counter.fetch_add(1, Ordering::Relaxed);
-            App {
-                inner: self.inner.clone(),
-                counter: self.counter.clone(),
-                options: self.options.clone(),
-                _no_send: PhantomData
-            }
-        })
-    }
+    pub(crate) fn as_ptr(&self) -> *mut saucer_application { self.0.as_ptr() }
 }
 
 extern "C" fn c_call_trampoline(raw: *mut c_void) {
