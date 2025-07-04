@@ -6,7 +6,7 @@ use saucers::app::App;
 use saucers::options::AppOptions;
 
 #[test]
-fn main() {
+fn app_test() {
     let app = App::new(AppOptions::new("saucer"));
     let app1 = app.clone();
     drop(app1);

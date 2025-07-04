@@ -1,8 +1,9 @@
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
 
@@ -22,17 +23,15 @@ unsafe impl Sync for AppPtr {}
 
 pub struct App {
     inner: Arc<RwLock<Option<AppPtr>>>,
-    counter: Arc<Mutex<i32>>,
+    counter: Arc<AtomicU32>,
     options: Arc<AppOptions>,
     _no_send: PhantomData<*const ()>
 }
 
 impl Drop for App {
     fn drop(&mut self) {
-        let mut counter = self.counter.try_lock().expect("App must not be dropped concurrently");
-        *counter -= 1;
-
-        if *counter > 0 {
+        // The atomic is only used on the event thread, so `Relaxed` is already sufficient.
+        if self.counter.fetch_sub(1, Ordering::Relaxed) > 1 {
             return;
         }
 
@@ -50,7 +49,7 @@ impl Drop for App {
 
 impl Clone for App {
     fn clone(&self) -> Self {
-        *self.counter.lock().unwrap() += 1;
+        self.counter.fetch_add(1, Ordering::Relaxed);
 
         Self {
             inner: self.inner.clone(),
@@ -69,7 +68,7 @@ impl App {
 
         Self {
             inner: Arc::new(RwLock::new(Some(AppPtr(ptr)))),
-            counter: Arc::new(Mutex::new(1)),
+            counter: Arc::new(AtomicU32::new(1)),
             options: Arc::new(opt),
             _no_send: PhantomData
         }
@@ -160,7 +159,7 @@ impl App {
 #[derive(Clone)]
 pub struct AppHandle {
     inner: Arc<RwLock<Option<AppPtr>>>,
-    counter: Arc<Mutex<i32>>,
+    counter: Arc<AtomicU32>,
     options: Arc<AppOptions>
 }
 
@@ -217,7 +216,8 @@ impl AppHandle {
         }
 
         self.inner.read().unwrap().map(|_| {
-            *self.counter.lock().unwrap() += 1;
+            // This is only called on the event thread (checked above).
+            self.counter.fetch_add(1, Ordering::Relaxed);
             App {
                 inner: self.inner.clone(),
                 counter: self.counter.clone(),
