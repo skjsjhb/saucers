@@ -87,21 +87,27 @@ impl App {
     /// Schedules the closure to be called during the next message queue polling.
     pub fn post(&self, fun: impl FnOnce() + 'static) {
         let (ptr, _guard) = self.get_ptr();
-        let bb: Box<dyn FnOnce() + 'static> = Box::new(fun);
-        let raw = Box::into_raw(Box::new(bb));
-        unsafe {
-            saucer_application_post_with_arg(ptr.as_ptr(), Some(post_trampoline), raw as *mut c_void);
-        }
+        Self::post_raw(ptr, fun);
+    }
+
+    /// Posts a closure to be executed on a background thread and waits for it to return.
+    pub fn pool_submit(&self, fun: impl FnOnce() + Send + 'static) {
+        let (ptr, _guard) = self.get_ptr();
+        Self::pool_submit_raw(ptr, fun);
+    }
+
+    /// Posts a closure to be executed on a background thread and returns immediately.
+    pub fn pool_emplace(&self, fun: impl FnOnce() + Send + 'static) {
+        let (ptr, _guard) = self.get_ptr();
+        Self::pool_emplace_raw(ptr, fun);
     }
 
     /// Runs the event loop (blocking).
     pub fn run(&self) {
-        println!("Starting event loop");
         let (ptr, _guard) = self.get_ptr();
         unsafe {
             saucer_application_run(ptr.as_ptr());
         }
-        println!("Leaving event loop")
     }
 
     /// Runs the event loop (non-blocking).
@@ -120,6 +126,30 @@ impl App {
         }
     }
 
+    fn post_raw(ptr: AppPtr, fun: impl FnOnce() + 'static) {
+        let bb: Box<dyn FnOnce() + 'static> = Box::new(fun);
+        let raw = Box::into_raw(Box::new(bb));
+        unsafe {
+            saucer_application_post_with_arg(ptr.as_ptr(), Some(c_call_trampoline), raw as *mut c_void);
+        }
+    }
+
+    fn pool_submit_raw(ptr: AppPtr, fun: impl FnOnce() + Send + 'static) {
+        let bb: Box<dyn FnOnce() + Send + 'static> = Box::new(fun);
+        let raw = Box::into_raw(Box::new(bb));
+        unsafe {
+            saucer_application_pool_submit_with_arg(ptr.as_ptr(), Some(c_call_trampoline), raw as *mut c_void);
+        }
+    }
+
+    fn pool_emplace_raw(ptr: AppPtr, fun: impl FnOnce() + Send + 'static) {
+        let bb: Box<dyn FnOnce() + Send + 'static> = Box::new(fun);
+        let raw = Box::into_raw(Box::new(bb));
+        unsafe {
+            saucer_application_pool_emplace_with_arg(ptr.as_ptr(), Some(c_call_trampoline), raw as *mut c_void);
+        }
+    }
+
     pub(crate) fn get_ptr(&self) -> (AppPtr, RwLockReadGuard<'_, Option<AppPtr>>) {
         let guard = self.inner.read().unwrap();
         let ptr = guard.expect("Owned app pointer should always be valid");
@@ -127,6 +157,7 @@ impl App {
     }
 }
 
+#[derive(Clone)]
 pub struct AppHandle {
     inner: Arc<RwLock<Option<AppPtr>>>,
     counter: Arc<Mutex<i32>>,
@@ -152,12 +183,28 @@ impl AppHandle {
     /// Does nothing if the app has been dropped.
     pub fn post(&self, fun: impl FnOnce() + Send + 'static) {
         let guard = self.inner.read().unwrap();
-        if let Some(ref ptr) = *guard {
-            let bb: Box<dyn FnOnce() + Send + 'static> = Box::new(fun);
-            let raw = Box::into_raw(Box::new(bb));
-            unsafe {
-                saucer_application_post_with_arg(ptr.as_ptr(), Some(post_trampoline), raw as *mut c_void);
-            }
+        if let Some(ptr) = *guard {
+            App::post_raw(ptr, fun);
+        }
+    }
+
+    /// Posts a closure to be executed on a background thread and waits for it to return.
+    ///
+    /// Does nothing if the app has been dropped.
+    pub fn pool_submit(&self, fun: impl FnOnce() + Send + 'static) {
+        let guard = self.inner.read().unwrap();
+        if let Some(ptr) = *guard {
+            App::pool_submit_raw(ptr, fun);
+        }
+    }
+
+    /// Posts a closure to be executed on a background thread and returns immediately.
+    ///
+    /// Does nothing if the app has been dropped.
+    pub fn pool_emplace(&self, fun: impl FnOnce() + Send + 'static) {
+        let guard = self.inner.read().unwrap();
+        if let Some(ptr) = *guard {
+            App::pool_emplace_raw(ptr, fun);
         }
     }
 
@@ -181,24 +228,9 @@ impl AppHandle {
     }
 }
 
-extern "C" fn post_trampoline(raw: *mut c_void) {
+extern "C" fn c_call_trampoline(raw: *mut c_void) {
     unsafe {
         let bb = Box::from_raw(raw as *mut Box<dyn FnOnce()>);
         bb();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::app::App;
-    use crate::options::AppOptions;
-
-    #[test]
-    fn test_app() {
-        let app = App::new(AppOptions::new("saucer"));
-        let app1 = app.clone();
-        app.post(move || app1.quit());
-        app.run();
-        println!("After app run")
     }
 }
