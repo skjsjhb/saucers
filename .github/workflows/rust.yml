@@ -15,8 +15,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v4
+      - uses: egor-tensin/setup-gcc@v1
+        with:
+          version: latest
+          platform: x64
+      - name: Install Dependencies
+        run: |-
+          sudo apt install libwebkitgtk-6.0-4
+          sudo apt install libwebkitgtk-6.0-dev
+      - name: Build
+        run: cargo build --verbose
+      - name: Test
+        run: cargo test --verbose
