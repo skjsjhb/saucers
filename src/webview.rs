@@ -19,15 +19,18 @@ use crate::collector::Collect;
 use crate::collector::UnsafeCollector;
 use crate::prefs::Preferences;
 
+#[derive(Default)]
 struct WebviewPtr {
-    ptr: NonNull<saucer_handle>,
+    ptr: Option<NonNull<saucer_handle>>,
     message_handler: Option<*mut Rc<RefCell<Box<dyn FnMut(&str) -> bool>>>>,
     _owns: PhantomData<saucer_handle>,
     _counter: Arc<()>,
 
     on_dom_ready_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut()>>>>,
+    on_navigate_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(WebviewNavigation) -> bool>>>>,
     on_navigated_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(&str)>>>>,
     on_title_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(&str)>>>>,
+    on_load_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(WebviewLoadState)>>>>,
 
     on_decorated_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(bool)>>>>,
     on_maximize_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(bool)>>>>,
@@ -38,8 +41,10 @@ struct WebviewPtr {
     on_close_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut() -> bool>>>>,
 
     once_dom_ready_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce()>>>>>,
+    once_navigate_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(WebviewNavigation) -> bool>>>>>,
     once_navigated_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(&str)>>>>>,
     once_title_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(&str)>>>>>,
+    once_load_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(WebviewLoadState)>>>>>,
 
     once_decorated_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(bool)>>>>>,
     once_maximize_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(bool)>>>>>,
@@ -54,13 +59,13 @@ unsafe impl Send for WebviewPtr {}
 unsafe impl Sync for WebviewPtr {}
 
 impl WebviewPtr {
-    fn as_ptr(&self) -> *mut saucer_handle { self.ptr.as_ptr() }
+    fn as_ptr(&self) -> *mut saucer_handle { self.ptr.unwrap().as_ptr() }
 }
 
 impl Collect for WebviewPtr {
     fn collect(self: Box<Self>) {
         unsafe {
-            saucer_free(self.ptr.as_ptr());
+            saucer_free(self.ptr.unwrap().as_ptr());
 
             if let Some(ptr) = self.message_handler {
                 drop(Box::from_raw(ptr));
@@ -69,6 +74,8 @@ impl Collect for WebviewPtr {
             drop_handlers(self.on_dom_ready_handlers);
             drop_handlers(self.on_navigated_handlers);
             drop_handlers(self.on_title_handlers);
+            drop_handlers(self.on_load_handlers);
+
             drop_handlers(self.on_decorated_handlers);
             drop_handlers(self.on_maximize_handlers);
             drop_handlers(self.on_minimize_handlers);
@@ -80,6 +87,7 @@ impl Collect for WebviewPtr {
             drop_once_handlers(self.once_dom_ready_handlers);
             drop_once_handlers(self.once_navigated_handlers);
             drop_once_handlers(self.once_title_handlers);
+            drop_once_handlers(self.once_load_handlers);
 
             drop_once_handlers(self.once_decorated_handlers);
             drop_once_handlers(self.once_maximize_handlers);
@@ -146,39 +154,13 @@ impl UnsafeWebview {
 
         let ptr = unsafe { saucer_new(pref.as_ptr()) };
         let ptr = NonNull::new(ptr).expect("Failed to create webview");
-        let ptr = WebviewPtr {
-            ptr,
-            message_handler: None,
-            _owns: PhantomData,
-            _counter: collector.count(),
 
-            on_dom_ready_handlers: HashMap::new(),
-            on_navigated_handlers: HashMap::new(),
-            on_title_handlers: HashMap::new(),
-
-            on_decorated_handlers: HashMap::new(),
-            on_maximize_handlers: HashMap::new(),
-            on_minimize_handlers: HashMap::new(),
-            on_closed_handlers: HashMap::new(),
-            on_resize_handlers: HashMap::new(),
-            on_focus_handlers: HashMap::new(),
-            on_close_handlers: HashMap::new(),
-
-            once_dom_ready_handlers: Vec::new(),
-            once_navigated_handlers: Vec::new(),
-            once_title_handlers: Vec::new(),
-
-            once_decorated_handlers: Vec::new(),
-            once_maximize_handlers: Vec::new(),
-            once_minimize_handlers: Vec::new(),
-            once_closed_handlers: Vec::new(),
-            once_resize_handlers: Vec::new(),
-            once_focus_handlers: Vec::new(),
-            once_close_handlers: Vec::new()
-        };
+        let mut wpt = WebviewPtr::default();
+        wpt.ptr = Some(ptr);
+        wpt._counter = collector.count();
 
         Some(Self {
-            ptr: Some(ptr),
+            ptr: Some(wpt),
             collector: Some(Arc::downgrade(&collector)),
             collector_tx: collector.get_sender(),
             app
@@ -215,19 +197,29 @@ impl UnsafeWebview {
     }
 }
 
-macro_rules! unc {
+macro_rules! ctor {
+    (free, $ptr:expr) => {{
+        ctor!($ptr, { saucer_memory_free($ptr as *mut c_void); })
+    }};
+
     ($ptr:expr) => {{
+        ctor!($ptr, {})
+    }};
+
+    ($ptr:expr, $drop:tt) => {{
         unsafe {
             if $ptr.is_null() {
                 "".to_owned()
             } else {
-                CStr::from_ptr($ptr).to_str().expect("Invalid UTF-8 string").to_owned()
+                let st = CStr::from_ptr($ptr).to_str().expect("Invalid UTF-8 string").to_owned();
+                $drop
+                st
             }
         }
     }};
 }
 
-macro_rules! toc {
+macro_rules! rtoc {
     ($arg: ident, $ptr:ident, $ex: expr) => {{
         let $ptr = CString::new($arg.as_ref()).unwrap();
         unsafe { $ex }
@@ -239,7 +231,7 @@ extern "C" fn on_message_trampoline(msg: *const c_char, raw: *mut c_void) -> boo
     let rc = (*bb).clone();
     let mut fun = rc.borrow_mut();
     let _ = Box::into_raw(bb); // Avoid dropping the handler
-    (*fun)(&unc!(msg))
+    (*fun)(&ctor!(msg))
 }
 
 #[derive(Clone)]
@@ -262,9 +254,9 @@ impl Webview {
     /// This method must be called on the event thread, or it does nothing.
     pub fn off_message(&self) { self.0.write().unwrap().remove_message_handler(); }
 
-    pub fn page_title(&self) -> String { unc!(saucer_webview_page_title(self.as_ptr())) }
+    pub fn page_title(&self) -> String { ctor!(free, saucer_webview_page_title(self.as_ptr())) }
     pub fn dev_tools(&self) -> bool { unsafe { saucer_webview_dev_tools(self.as_ptr()) } }
-    pub fn url(&self) -> String { unc!(saucer_webview_url(self.as_ptr())) }
+    pub fn url(&self) -> String { ctor!(free, saucer_webview_url(self.as_ptr())) }
     pub fn context_menu(&self) -> bool { unsafe { saucer_webview_context_menu(self.as_ptr()) } }
     pub fn background(&self) -> (u8, u8, u8, u8) {
         let mut r = 0u8;
@@ -292,8 +284,8 @@ impl Webview {
     pub fn set_background(&self, r: u8, g: u8, b: u8, a: u8) {
         unsafe { saucer_webview_set_background(self.as_ptr(), r, g, b, a) }
     }
-    pub fn set_file(&self, file: impl AsRef<str>) { toc!(file, s, saucer_webview_set_file(self.as_ptr(), s.as_ptr())) }
-    pub fn set_url(&self, url: impl AsRef<str>) { toc!(url, s, saucer_webview_set_url(self.as_ptr(), s.as_ptr())) }
+    pub fn set_file(&self, file: impl AsRef<str>) { rtoc!(file, s, saucer_webview_set_file(self.as_ptr(), s.as_ptr())) }
+    pub fn set_url(&self, url: impl AsRef<str>) { rtoc!(url, s, saucer_webview_set_url(self.as_ptr(), s.as_ptr())) }
 
     pub fn back(&self) { unsafe { saucer_webview_back(self.as_ptr()) } }
     pub fn forward(&self) { unsafe { saucer_webview_forward(self.as_ptr()) } }
@@ -302,7 +294,7 @@ impl Webview {
     pub fn clear_scripts(&self) { unsafe { saucer_webview_clear_scripts(self.as_ptr()) } }
     pub fn clear_embedded(&self) { unsafe { saucer_webview_clear_embedded(self.as_ptr()) } }
 
-    pub fn execute(&self, code: impl AsRef<str>) { toc!(code, s, saucer_webview_execute(self.as_ptr(), s.as_ptr())) }
+    pub fn execute(&self, code: impl AsRef<str>) { rtoc!(code, s, saucer_webview_execute(self.as_ptr(), s.as_ptr())) }
 
     pub fn visible(&self) -> bool { unsafe { saucer_window_visible(self.as_ptr()) } }
     pub fn focused(&self) -> bool { unsafe { saucer_window_focused(self.as_ptr()) } }
@@ -313,7 +305,7 @@ impl Webview {
     pub fn always_on_top(&self) -> bool { unsafe { saucer_window_always_on_top(self.as_ptr()) } }
     pub fn click_through(&self) -> bool { unsafe { saucer_window_click_through(self.as_ptr()) } }
 
-    pub fn title(&self) -> String { unc!(saucer_window_title(self.as_ptr())) }
+    pub fn title(&self) -> String { ctor!(free, saucer_window_title(self.as_ptr())) }
 
     pub fn size(&self) -> (i32, i32) {
         let mut w = 0;
@@ -355,7 +347,7 @@ impl Webview {
     pub fn set_click_through(&self, b: bool) { unsafe { saucer_window_set_click_through(self.as_ptr(), b) } }
 
     pub fn set_title(&self, title: impl AsRef<str>) {
-        toc!(title, s, saucer_window_set_title(self.as_ptr(), s.as_ptr()))
+        rtoc!(title, s, saucer_window_set_title(self.as_ptr(), s.as_ptr()))
     }
 
     pub fn set_size(&self, w: i32, h: i32) { unsafe { saucer_window_set_size(self.as_ptr(), w, h) } }
@@ -365,6 +357,43 @@ impl Webview {
     fn as_ptr(&self) -> *mut saucer_handle { self.0.read().unwrap().as_ptr() }
 
     fn is_event_thread(&self) -> bool { self.0.read().unwrap().app.is_thread_safe() }
+}
+
+// --- Event Handling ---
+
+pub struct WebviewNavigation {
+    ptr: NonNull<saucer_navigation>,
+    _owns: PhantomData<saucer_navigation>
+}
+
+unsafe impl Send for WebviewNavigation {}
+unsafe impl Sync for WebviewNavigation {}
+
+impl Drop for WebviewNavigation {
+    fn drop(&mut self) { unsafe { saucer_navigation_free(self.ptr.as_ptr()) } }
+}
+
+impl WebviewNavigation {
+    unsafe fn from_ptr(ptr: *mut saucer_navigation) -> Self {
+        Self {
+            ptr: NonNull::new(ptr).expect("Invalid navigation descriptor"),
+            _owns: PhantomData
+        }
+    }
+
+    pub fn is_new_window(&self) -> bool { unsafe { saucer_navigation_new_window(self.ptr.as_ptr()) } }
+
+    pub fn is_redirection(&self) -> bool { unsafe { saucer_navigation_redirection(self.ptr.as_ptr()) } }
+
+    pub fn is_user_initiated(&self) -> bool { unsafe { saucer_navigation_user_initiated(self.ptr.as_ptr()) } }
+
+    pub fn url(&self) -> String { ctor!(free, saucer_navigation_url(self.ptr.as_ptr())) }
+}
+
+#[derive(Eq, PartialEq)]
+pub enum WebviewLoadState {
+    Started,
+    Finished
 }
 
 macro_rules! handle_evt {
@@ -484,6 +513,17 @@ impl Webview {
         )
     }
 
+    pub fn once_navigate(&self, fun: impl FnOnce(WebviewNavigation) -> bool + 'static) {
+        handle_evt_once!(
+            webview,
+            self,
+            once_navigate_trampoline,
+            fun -> dyn FnOnce(WebviewNavigation) -> bool + 'static,
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE,
+            once_navigate_handlers
+        )
+    }
+
     pub fn once_navigated(&self, fun: impl FnOnce(&str) + 'static) {
         handle_evt_once!(
             webview,
@@ -503,6 +543,17 @@ impl Webview {
             fun -> dyn FnOnce(&str) + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE,
             once_title_handlers
+        )
+    }
+
+    pub fn once_load(&self, fun: impl FnOnce(WebviewLoadState) + 'static) {
+        handle_evt_once!(
+            webview,
+            self,
+            once_load_trampoline,
+            fun -> dyn FnOnce(WebviewLoadState) + 'static,
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD,
+            once_load_handlers
         )
     }
 
@@ -594,6 +645,17 @@ impl Webview {
         )
     }
 
+    pub fn on_navigate(&self, fun: impl FnMut(WebviewNavigation) -> bool + 'static) -> Option<u64> {
+        handle_evt!(
+            webview,
+            self,
+            on_navigate_trampoline,
+            fun -> dyn FnMut(WebviewNavigation) -> bool + 'static,
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE,
+            on_navigate_handlers
+        )
+    }
+
     pub fn on_navigated(&self, fun: impl FnMut(&str) + 'static) -> Option<u64> {
         handle_evt!(
             webview,
@@ -613,6 +675,17 @@ impl Webview {
             fun -> dyn FnMut(&str) + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE,
             on_title_handlers
+        )
+    }
+
+    pub fn on_load(&self, fun: impl FnMut(WebviewLoadState) + 'static) -> Option<u64> {
+        handle_evt!(
+            webview,
+            self,
+            on_load_trampoline,
+            fun -> dyn FnMut(WebviewLoadState) + 'static,
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD,
+            on_load_handlers
         )
     }
 
@@ -697,12 +770,20 @@ impl Webview {
         drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY, on_dom_ready_handlers)
     }
 
+    pub fn off_navigate(&self, id: u64) {
+        drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE, on_navigate_handlers)
+    }
+
     pub fn off_navigated(&self, id: u64) {
         drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED, on_navigated_handlers)
     }
 
     pub fn off_title(&self, id: u64) {
         drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_handlers)
+    }
+
+    pub fn off_load(&self, id: u64) {
+        drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD, on_load_handlers)
     }
 
     pub fn off_decorated(&self, id: u64) {
@@ -737,12 +818,20 @@ impl Webview {
         drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY, on_dom_ready_handlers);
     }
 
+    pub fn clear_navigate(&self) {
+        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE, on_navigate_handlers);
+    }
+
     pub fn clear_navigated(&self) {
         drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED, on_navigated_handlers);
     }
 
     pub fn clear_title(&self) {
         drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_handlers);
+    }
+
+    pub fn clear_load(&self) {
+        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD, on_load_handlers);
     }
 
     pub fn clear_decorated(&self) {
@@ -782,8 +871,20 @@ extern "C" fn once_dom_ready_trampoline(_: *mut saucer_handle, arg: *mut c_void)
     let _ = Box::into_raw(bb);
 }
 
+extern "C" fn once_navigate_trampoline(_: *mut saucer_handle, arg: *mut c_void, nav: *mut saucer_navigation) -> bool {
+    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Option<Box<dyn FnOnce(WebviewNavigation) -> bool>>>>) };
+    let rt = if let Some(fun) = bb.borrow_mut().take() {
+        let nav = unsafe { WebviewNavigation::from_ptr(nav) };
+        fun(nav)
+    } else {
+        false
+    };
+    let _ = Box::into_raw(bb);
+    rt
+}
+
 extern "C" fn once_navigated_trampoline(_: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
-    let url = unc!(url);
+    let url = ctor!(url);
     let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Option<Box<dyn FnOnce(&str)>>>>) };
     if let Some(fun) = bb.borrow_mut().take() {
         fun(&url);
@@ -793,6 +894,22 @@ extern "C" fn once_navigated_trampoline(_: *mut saucer_handle, arg: *mut c_void,
 
 extern "C" fn once_title_trampoline(h: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
     once_navigated_trampoline(h, arg, url);
+}
+
+extern "C" fn once_load_trampoline(_: *mut saucer_handle, arg: *mut c_void, state: SAUCER_STATE) {
+    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Option<Box<dyn FnOnce(WebviewLoadState)>>>>) };
+
+    let state = if state == SAUCER_STATE_SAUCER_STATE_STARTED {
+        WebviewLoadState::Started
+    } else {
+        WebviewLoadState::Finished
+    };
+
+    if let Some(fun) = bb.borrow_mut().take() {
+        fun(state);
+    }
+
+    let _ = Box::into_raw(bb);
 }
 
 extern "C" fn once_decorated_trampoline(_: *mut saucer_handle, arg: *mut c_void, b: bool) {
@@ -847,8 +964,16 @@ extern "C" fn on_dom_ready_trampoline(_: *mut saucer_handle, arg: *mut c_void) {
     rc.borrow_mut()();
 }
 
+extern "C" fn on_navigate_trampoline(_: *mut saucer_handle, arg: *mut c_void, nav: *mut saucer_navigation) -> bool {
+    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(WebviewNavigation) -> bool>>>) };
+    let rc = (*bb).clone();
+    let _ = Box::into_raw(bb);
+    let nav = unsafe { WebviewNavigation::from_ptr(nav) };
+    rc.borrow_mut()(nav)
+}
+
 extern "C" fn on_navigated_trampoline(_: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
-    let url = unc!(url);
+    let url = ctor!(url);
     let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(&str)>>>) };
     let rc = (*bb).clone();
     let _ = Box::into_raw(bb);
@@ -857,6 +982,20 @@ extern "C" fn on_navigated_trampoline(_: *mut saucer_handle, arg: *mut c_void, u
 
 extern "C" fn on_title_trampoline(h: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
     on_navigated_trampoline(h, arg, url);
+}
+
+extern "C" fn on_load_trampoline(_: *mut saucer_handle, arg: *mut c_void, state: SAUCER_STATE) {
+    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(WebviewLoadState)>>>) };
+    let rc = (*bb).clone();
+    let _ = Box::into_raw(bb);
+
+    let state = if state == SAUCER_STATE_SAUCER_STATE_STARTED {
+        WebviewLoadState::Started
+    } else {
+        WebviewLoadState::Finished
+    };
+
+    rc.borrow_mut()(state);
 }
 
 extern "C" fn on_decorated_trampoline(_: *mut saucer_handle, arg: *mut c_void, b: bool) {
