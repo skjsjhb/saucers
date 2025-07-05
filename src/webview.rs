@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::ffi::CStr;
@@ -22,7 +23,11 @@ struct WebviewPtr {
     ptr: NonNull<saucer_handle>,
     message_handler: Option<*mut Rc<RefCell<Box<dyn FnMut(&str) -> bool>>>>,
     _owns: PhantomData<saucer_handle>,
-    _counter: Arc<()>
+    _counter: Arc<()>,
+
+    on_dom_ready_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut()>>>>,
+    on_navigated_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(&str)>>>>,
+    on_title_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(&str)>>>>
 }
 
 unsafe impl Send for WebviewPtr {}
@@ -41,7 +46,17 @@ impl Collect for WebviewPtr {
             if let Some(ptr) = self.message_handler {
                 drop(Box::from_raw(ptr));
             }
+
+            drop_handlers(self.on_dom_ready_handlers);
+            drop_handlers(self.on_navigated_handlers);
+            drop_handlers(self.on_title_handlers);
         }
+    }
+}
+
+fn drop_handlers<T>(hm: HashMap<u64, *mut T>) {
+    for ptr in hm.into_values() {
+        unsafe { drop(Box::from_raw(ptr)) }
     }
 }
 
@@ -76,7 +91,6 @@ impl Drop for UnsafeWebview {
 impl UnsafeWebview {
     fn new(pref: &Preferences) -> Option<Self> {
         let app = pref.get_app();
-
         if !app.is_thread_safe() {
             return None;
         }
@@ -92,7 +106,11 @@ impl UnsafeWebview {
             ptr,
             message_handler: None,
             _owns: PhantomData,
-            _counter: collector.count()
+            _counter: collector.count(),
+
+            on_dom_ready_handlers: HashMap::new(),
+            on_navigated_handlers: HashMap::new(),
+            on_title_handlers: HashMap::new()
         };
 
         Some(Self {
@@ -280,5 +298,115 @@ impl Webview {
     pub fn set_max_size(&self, w: i32, h: i32) { unsafe { saucer_window_set_max_size(self.as_ptr(), w, h) } }
     pub fn set_min_size(&self, w: i32, h: i32) { unsafe { saucer_window_set_min_size(self.as_ptr(), w, h) } }
 
-    pub fn as_ptr(&self) -> *mut saucer_handle { self.0.read().unwrap().as_ptr() }
+    fn as_ptr(&self) -> *mut saucer_handle { self.0.read().unwrap().as_ptr() }
+
+    fn is_event_thread(&self) -> bool { self.0.read().unwrap().app.is_thread_safe() }
+}
+
+macro_rules! handle_evt {
+    ($sf:ident, $cfn:ident -> $ctp:ty, $fun:ident -> $rtp:ty, $chn:expr, $hm:ident) => {{
+        if !$sf.is_event_thread() {
+            return None;
+        }
+
+        let fn_ptr: $ctp = $cfn;
+        let bb = Box::new($fun) as Box<$rtp>;
+        let ptr = Box::into_raw(Box::new(Rc::new(RefCell::new(bb))));
+        let id = unsafe { saucer_webview_on_with_arg($sf.as_ptr(), $chn, fn_ptr as *mut c_void, ptr as *mut c_void) };
+
+        let mut guard = $sf.0.write().unwrap();
+
+        let old = guard.ptr.as_mut().unwrap().$hm.insert(id, ptr);
+
+        // This is unlikely to happen as no two event handlers shall share the same ID.
+        // This drop is reserved here in case.
+        if let Some(pt) = old {
+            unsafe { drop(Box::from_raw(pt)) }
+        }
+
+        return Some(id);
+    }};
+}
+
+macro_rules! drop_evt {
+    ($sf:ident, $id:ident : $chn:expr, $hm:ident) => {{
+        if !$sf.is_event_thread() {
+            return;
+        }
+
+        unsafe { saucer_webview_remove($sf.as_ptr(), $chn, $id) }
+
+        let mut guard = $sf.0.write().unwrap();
+        let old = guard.ptr.as_mut().unwrap().$hm.remove(&$id);
+        if let Some(pt) = old {
+            unsafe { drop(Box::from_raw(pt)) }
+        }
+    }};
+}
+
+impl Webview {
+    pub fn on_dom_ready(&self, fun: impl FnMut() + 'static) -> Option<u64> {
+        handle_evt!(
+            self,
+            on_dom_ready_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void),
+            fun -> dyn FnMut() + 'static,
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY,
+            on_dom_ready_handlers
+        );
+    }
+
+    pub fn on_navigated(&self, fun: impl FnMut(&str) + 'static) -> Option<u64> {
+        handle_evt!(
+            self,
+            on_navigated_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void, *mut c_char),
+            fun -> dyn FnMut(&str) + 'static,
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED,
+            on_navigated_handlers
+        )
+    }
+
+    pub fn on_title(&self, fun: impl FnMut(&str) + 'static) -> Option<u64> {
+        handle_evt!(
+            self,
+            on_title_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void, *mut c_char),
+            fun -> dyn FnMut(&str) + 'static,
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE,
+            on_title_handlers
+        )
+    }
+
+    pub fn off_dom_ready(&self, id: u64) {
+        drop_evt!(self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY, on_dom_ready_handlers);
+    }
+
+    pub fn off_navigated(&self, id: u64) {
+        drop_evt!(self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED, on_navigated_handlers);
+    }
+
+    pub fn off_title(&self, id: u64) {
+        drop_evt!(self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_handlers);
+    }
+}
+
+extern "C" fn on_dom_ready_trampoline(_: *mut saucer_handle, arg: *mut c_void) {
+    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut()>>>) };
+    let rc = (*bb).clone();
+    let _ = Box::into_raw(bb);
+    rc.borrow_mut()();
+}
+
+extern "C" fn on_navigated_trampoline(_: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
+    let url = unc!(url);
+    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(&str)>>>) };
+    let rc = (*bb).clone();
+    let _ = Box::into_raw(bb);
+    rc.borrow_mut()(&url);
+}
+
+extern "C" fn on_title_trampoline(_: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
+    let url = unc!(url);
+    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(&str)>>>) };
+    let rc = (*bb).clone();
+    let _ = Box::into_raw(bb);
+    rc.borrow_mut()(&url);
 }

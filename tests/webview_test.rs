@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use saucers::app::App;
 use saucers::collector::Collector;
 use saucers::options::AppOptions;
@@ -9,12 +11,35 @@ fn webview_test() {
     let cc = Collector::new();
     let app = App::new(&cc, AppOptions::new("saucer"));
     let w = Webview::new(&Preferences::new(&app)).unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let arc = Arc::new(());
 
     w.set_url("https://saucer.app");
     w.set_size(1152, 648);
     w.set_dev_tools(true);
     w.set_title("Saucers");
     w.show();
+
+    let id = w
+        .on_dom_ready({
+            let w = w.clone();
+            let arc = arc.clone();
+            move || {
+                let _ = &arc;
+                w.execute("window.saucer.internal.send_message('')");
+            }
+        })
+        .unwrap();
+
+    let id1 = w
+        .on_title({
+            let arc = arc.clone();
+            move |title: &str| {
+                let _ = &arc;
+                tx.send(title.to_owned()).unwrap();
+            }
+        })
+        .unwrap();
 
     w.on_message({
         let w = w.clone();
@@ -26,10 +51,15 @@ fn webview_test() {
         }
     });
 
-    w.execute("window.saucer.internal.send_message('')");
-
     app.run();
 
+    assert!(
+        rx.recv().unwrap().len() > 0,
+        "Event handler should receive correct arguments"
+    );
+
+    w.off_dom_ready(id);
+    w.off_title(id1);
     w.off_message();
 
     std::thread::spawn(move || {
@@ -40,4 +70,6 @@ fn webview_test() {
 
     drop(app);
     drop(cc);
+
+    assert_eq!(Arc::strong_count(&arc), 1, "Event handlers should be dropped");
 }
