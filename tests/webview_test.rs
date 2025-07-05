@@ -41,12 +41,19 @@ fn webview_test() {
         })
         .unwrap();
 
+    w.once_closed({
+        let app = app.clone();
+        let arc = arc.clone();
+        move || {
+            let _ = &arc;
+            app.quit();
+        }
+    });
+
     w.on_message({
         let w = w.clone();
-        let app = app.clone();
         move |_: &str| -> bool {
             w.close();
-            app.quit();
             true
         }
     });
@@ -61,6 +68,13 @@ fn webview_test() {
     w.off_dom_ready(id);
     w.off_title(id1);
     w.off_message();
+
+    w.once_closed({
+        let arc = arc.clone();
+        move || {
+            let _ = &arc;
+        }
+    });
 
     std::thread::spawn(move || {
         drop(w);
