@@ -17,8 +17,10 @@ use crate::app::App;
 use crate::capi::*;
 use crate::collector::Collect;
 use crate::collector::UnsafeCollector;
+use crate::embed::EmbedFile;
 use crate::icon::Icon;
 use crate::prefs::Preferences;
+use crate::script::Script;
 
 #[derive(Default)]
 struct WebviewPtr {
@@ -223,8 +225,8 @@ macro_rules! ctor {
 }
 
 macro_rules! rtoc {
-    ($arg: ident, $ptr:ident, $ex: expr) => {{
-        let $ptr = CString::new($arg.as_ref()).unwrap();
+    ($($arg:expr => $ptr:ident),+ ; $ex: expr) => {{
+        $(let $ptr = CString::new($arg.as_ref()).unwrap();)+
         unsafe { $ex }
     }};
 }
@@ -287,17 +289,34 @@ impl Webview {
     pub fn set_background(&self, r: u8, g: u8, b: u8, a: u8) {
         unsafe { saucer_webview_set_background(self.as_ptr(), r, g, b, a) }
     }
-    pub fn set_file(&self, file: impl AsRef<str>) { rtoc!(file, s, saucer_webview_set_file(self.as_ptr(), s.as_ptr())) }
-    pub fn set_url(&self, url: impl AsRef<str>) { rtoc!(url, s, saucer_webview_set_url(self.as_ptr(), s.as_ptr())) }
+    pub fn set_file(&self, file: impl AsRef<str>) {
+        rtoc!(file => s ; saucer_webview_set_file(self.as_ptr(), s.as_ptr()));
+    }
+    pub fn set_url(&self, url: impl AsRef<str>) { rtoc!(url => s; saucer_webview_set_url(self.as_ptr(), s.as_ptr())) }
 
     pub fn back(&self) { unsafe { saucer_webview_back(self.as_ptr()) } }
     pub fn forward(&self) { unsafe { saucer_webview_forward(self.as_ptr()) } }
     pub fn reload(&self) { unsafe { saucer_webview_reload(self.as_ptr()) } }
 
+    pub fn embed_file(&self, name: impl AsRef<str>, file: &EmbedFile, do_async: bool) {
+        let launch = if do_async {
+            SAUCER_LAUNCH_SAUCER_LAUNCH_ASYNC
+        } else {
+            SAUCER_LAUNCH_SAUCER_LAUNCH_SYNC
+        };
+        rtoc!(
+            name => n;
+            saucer_webview_embed_file(self.as_ptr(), n.as_ptr(), file.as_ptr(), launch) // Data copied internally in C
+        );
+    }
+
+    pub fn serve(&self, file: impl AsRef<str>) { rtoc!(file => s; saucer_webview_serve(self.as_ptr(), s.as_ptr())) }
+
     pub fn clear_scripts(&self) { unsafe { saucer_webview_clear_scripts(self.as_ptr()) } }
     pub fn clear_embedded(&self) { unsafe { saucer_webview_clear_embedded(self.as_ptr()) } }
 
-    pub fn execute(&self, code: impl AsRef<str>) { rtoc!(code, s, saucer_webview_execute(self.as_ptr(), s.as_ptr())) }
+    pub fn inject(&self, script: &Script) { unsafe { saucer_webview_inject(self.as_ptr(), script.as_ptr()) } }
+    pub fn execute(&self, code: impl AsRef<str>) { rtoc!(code => s; saucer_webview_execute(self.as_ptr(), s.as_ptr())) }
 
     pub fn visible(&self) -> bool { unsafe { saucer_window_visible(self.as_ptr()) } }
     pub fn focused(&self) -> bool { unsafe { saucer_window_focused(self.as_ptr()) } }
@@ -350,7 +369,7 @@ impl Webview {
     pub fn set_click_through(&self, b: bool) { unsafe { saucer_window_set_click_through(self.as_ptr(), b) } }
 
     pub fn set_title(&self, title: impl AsRef<str>) {
-        rtoc!(title, s, saucer_window_set_title(self.as_ptr(), s.as_ptr()))
+        rtoc!(title => s; saucer_window_set_title(self.as_ptr(), s.as_ptr()))
     }
 
     pub fn set_size(&self, w: i32, h: i32) { unsafe { saucer_window_set_size(self.as_ptr(), w, h) } }
@@ -806,7 +825,7 @@ impl Webview {
     pub fn off_title(&self, id: u64) {
         drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_handlers)
     }
-    
+
     pub fn off_favicon(&self, id: u64) {
         drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON, on_favicon_handlers)
     }
@@ -858,7 +877,7 @@ impl Webview {
     pub fn clear_title(&self) {
         drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_handlers);
     }
-    
+
     pub fn clear_favicon(&self) {
         drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON, on_favicon_handlers);
     }

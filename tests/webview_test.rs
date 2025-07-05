@@ -4,6 +4,8 @@ use saucers::app::App;
 use saucers::collector::Collector;
 use saucers::options::AppOptions;
 use saucers::prefs::Preferences;
+use saucers::script::Script;
+use saucers::script::ScriptLoadTime;
 use saucers::webview::Webview;
 
 #[test]
@@ -28,17 +30,16 @@ fn webview_test() {
     });
 
     w.once_favicon(|icon| {
-        icon.save("a.ico");
-        assert!(std::fs::read("a.ico").unwrap().len() > 0, "Icon should be saved");
-        std::fs::remove_file("a.ico").unwrap();
+        assert!(
+            icon.data().data().is_some_and(|it| it.len() > 0),
+            "Icon should be retrieved"
+        );
     });
 
-    w.once_load({
-        let w = w.clone();
-        move |_| {
-            w.execute("window.saucer.internal.send_message('')");
-        }
-    });
+    w.inject(&Script::new(
+        "window.saucer.internal.send_message('')",
+        ScriptLoadTime::Ready
+    ));
 
     w.clear_closed();
 

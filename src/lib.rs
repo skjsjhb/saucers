@@ -7,8 +7,10 @@
 pub mod app;
 mod capi;
 pub mod collector;
+pub mod embed;
 pub mod icon;
 pub mod options;
 pub mod prefs;
+pub mod script;
 pub mod stash;
 pub mod webview;
