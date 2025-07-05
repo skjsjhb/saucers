@@ -27,17 +27,28 @@ fn webview_test() {
         }
     });
 
+    w.once_favicon(|icon| {
+        icon.save("a.ico");
+        assert!(std::fs::read("a.ico").unwrap().len() > 0, "Icon should be saved");
+        std::fs::remove_file("a.ico").unwrap();
+    });
+
+    w.once_load({
+        let w = w.clone();
+        move |_| {
+            w.execute("window.saucer.internal.send_message('')");
+        }
+    });
+
     w.clear_closed();
 
     assert_eq!(Arc::strong_count(&arc), 1, "Cleared event handlers should be dropped");
 
     let id = w
         .on_dom_ready({
-            let w = w.clone();
             let arc = arc.clone();
             move || {
                 let _ = &arc;
-                w.execute("window.saucer.internal.send_message('')");
             }
         })
         .unwrap();

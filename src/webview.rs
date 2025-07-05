@@ -17,6 +17,7 @@ use crate::app::App;
 use crate::capi::*;
 use crate::collector::Collect;
 use crate::collector::UnsafeCollector;
+use crate::icon::Icon;
 use crate::prefs::Preferences;
 
 #[derive(Default)]
@@ -30,6 +31,7 @@ struct WebviewPtr {
     on_navigate_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(WebviewNavigation) -> bool>>>>,
     on_navigated_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(&str)>>>>,
     on_title_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(&str)>>>>,
+    on_favicon_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(Icon)>>>>,
     on_load_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(WebviewLoadState)>>>>,
 
     on_decorated_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(bool)>>>>,
@@ -44,6 +46,7 @@ struct WebviewPtr {
     once_navigate_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(WebviewNavigation) -> bool>>>>>,
     once_navigated_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(&str)>>>>>,
     once_title_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(&str)>>>>>,
+    once_favicon_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(Icon)>>>>>,
     once_load_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(WebviewLoadState)>>>>>,
 
     once_decorated_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(bool)>>>>>,
@@ -546,6 +549,17 @@ impl Webview {
         )
     }
 
+    pub fn once_favicon(&self, fun: impl FnOnce(Icon) + 'static) {
+        handle_evt_once!(
+            webview,
+            self,
+            once_favicon_trampoline,
+            fun -> dyn FnOnce(Icon) + 'static,
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON,
+            once_favicon_handlers
+        )
+    }
+
     pub fn once_load(&self, fun: impl FnOnce(WebviewLoadState) + 'static) {
         handle_evt_once!(
             webview,
@@ -678,6 +692,17 @@ impl Webview {
         )
     }
 
+    pub fn on_favicon(&self, fun: impl FnMut(Icon) + 'static) -> Option<u64> {
+        handle_evt!(
+            webview,
+            self,
+            on_favicon_trampoline,
+            fun -> dyn FnMut(Icon) + 'static,
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON,
+            on_favicon_handlers
+        )
+    }
+
     pub fn on_load(&self, fun: impl FnMut(WebviewLoadState) + 'static) -> Option<u64> {
         handle_evt!(
             webview,
@@ -781,6 +806,10 @@ impl Webview {
     pub fn off_title(&self, id: u64) {
         drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_handlers)
     }
+    
+    pub fn off_favicon(&self, id: u64) {
+        drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON, on_favicon_handlers)
+    }
 
     pub fn off_load(&self, id: u64) {
         drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD, on_load_handlers)
@@ -828,6 +857,10 @@ impl Webview {
 
     pub fn clear_title(&self) {
         drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_handlers);
+    }
+    
+    pub fn clear_favicon(&self) {
+        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON, on_favicon_handlers);
     }
 
     pub fn clear_load(&self) {
@@ -894,6 +927,15 @@ extern "C" fn once_navigated_trampoline(_: *mut saucer_handle, arg: *mut c_void,
 
 extern "C" fn once_title_trampoline(h: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
     once_navigated_trampoline(h, arg, url);
+}
+
+extern "C" fn once_favicon_trampoline(_: *mut saucer_handle, arg: *mut c_void, icon: *mut saucer_icon) {
+    let icon = Icon::from_ptr(icon);
+    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Option<Box<dyn FnOnce(Icon)>>>>) };
+    if let Some(fun) = bb.borrow_mut().take() {
+        fun(icon);
+    }
+    let _ = Box::into_raw(bb);
 }
 
 extern "C" fn once_load_trampoline(_: *mut saucer_handle, arg: *mut c_void, state: SAUCER_STATE) {
@@ -982,6 +1024,14 @@ extern "C" fn on_navigated_trampoline(_: *mut saucer_handle, arg: *mut c_void, u
 
 extern "C" fn on_title_trampoline(h: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
     on_navigated_trampoline(h, arg, url);
+}
+
+extern "C" fn on_favicon_trampoline(_: *mut saucer_handle, arg: *mut c_void, icon: *mut saucer_icon) {
+    let icon = Icon::from_ptr(icon);
+    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(Icon)>>>) };
+    let rc = (*bb).clone();
+    let _ = Box::into_raw(bb);
+    rc.borrow_mut()(icon);
 }
 
 extern "C" fn on_load_trampoline(_: *mut saucer_handle, arg: *mut c_void, state: SAUCER_STATE) {
