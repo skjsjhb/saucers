@@ -1,17 +1,17 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ffi::c_char;
-use std::ffi::c_void;
 use std::ffi::CStr;
 use std::ffi::CString;
+use std::ffi::c_char;
+use std::ffi::c_void;
 use std::marker::PhantomData;
-use std::ptr::null_mut;
 use std::ptr::NonNull;
+use std::ptr::null_mut;
 use std::rc::Rc;
-use std::sync::mpmc::Sender;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::Weak;
+use std::sync::mpmc::Sender;
 
 use crate::app::App;
 use crate::capi::*;
@@ -27,7 +27,15 @@ struct WebviewPtr {
 
     on_dom_ready_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut()>>>>,
     on_navigated_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(&str)>>>>,
-    on_title_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(&str)>>>>
+    on_title_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(&str)>>>>,
+
+    on_decorated_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(bool)>>>>,
+    on_maximize_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(bool)>>>>,
+    on_minimize_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(bool)>>>>,
+    on_closed_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut()>>>>,
+    on_resize_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(i32, i32)>>>>,
+    on_focus_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(bool)>>>>,
+    on_close_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut() -> bool>>>>
 }
 
 unsafe impl Send for WebviewPtr {}
@@ -110,7 +118,15 @@ impl UnsafeWebview {
 
             on_dom_ready_handlers: HashMap::new(),
             on_navigated_handlers: HashMap::new(),
-            on_title_handlers: HashMap::new()
+            on_title_handlers: HashMap::new(),
+
+            on_decorated_handlers: HashMap::new(),
+            on_maximize_handlers: HashMap::new(),
+            on_minimize_handlers: HashMap::new(),
+            on_closed_handlers: HashMap::new(),
+            on_resize_handlers: HashMap::new(),
+            on_focus_handlers: HashMap::new(),
+            on_close_handlers: HashMap::new()
         };
 
         Some(Self {
@@ -304,7 +320,11 @@ impl Webview {
 }
 
 macro_rules! handle_evt {
-    ($sf:ident, $cfn:ident -> $ctp:ty, $fun:ident -> $rtp:ty, $chn:expr, $hm:ident) => {{
+    (webview, $sf:ident, $cfn:ident -> $ctp:ty, $fun:ident -> $rtp:ty, $chn:expr, $hm:ident) => {{ handle_evt!($sf, $cfn -> $ctp, $fun -> $rtp, $chn, $hm, saucer_webview_on_with_arg) }};
+
+    (window, $sf:ident, $cfn:ident -> $ctp:ty, $fun:ident -> $rtp:ty, $chn:expr, $hm:ident) => {{ handle_evt!($sf, $cfn -> $ctp, $fun -> $rtp, $chn, $hm, saucer_window_on_with_arg) }};
+
+    ($sf:ident, $cfn:ident -> $ctp:ty, $fun:ident -> $rtp:ty, $chn:expr, $hm:ident, $capi:ident) => {{
         if !$sf.is_event_thread() {
             return None;
         }
@@ -312,7 +332,7 @@ macro_rules! handle_evt {
         let fn_ptr: $ctp = $cfn;
         let bb = Box::new($fun) as Box<$rtp>;
         let ptr = Box::into_raw(Box::new(Rc::new(RefCell::new(bb))));
-        let id = unsafe { saucer_webview_on_with_arg($sf.as_ptr(), $chn, fn_ptr as *mut c_void, ptr as *mut c_void) };
+        let id = unsafe { $capi($sf.as_ptr(), $chn, fn_ptr as *mut c_void, ptr as *mut c_void) };
 
         let mut guard = $sf.0.write().unwrap();
 
@@ -329,12 +349,16 @@ macro_rules! handle_evt {
 }
 
 macro_rules! drop_evt {
-    ($sf:ident, $id:ident : $chn:expr, $hm:ident) => {{
+    (webview, $sf:ident, $id:ident : $chn:expr, $hm:ident) => {{ drop_evt!($sf, $id : $chn, $hm, saucer_webview_remove) }};
+
+    (window, $sf:ident, $id:ident : $chn:expr, $hm:ident) => {{ drop_evt!($sf, $id : $chn, $hm, saucer_window_remove) }};
+
+    ($sf:ident, $id:ident : $chn:expr, $hm:ident, $capi:ident) => {{
         if !$sf.is_event_thread() {
             return;
         }
 
-        unsafe { saucer_webview_remove($sf.as_ptr(), $chn, $id) }
+        unsafe { $capi($sf.as_ptr(), $chn, $id) }
 
         let mut guard = $sf.0.write().unwrap();
         let old = guard.ptr.as_mut().unwrap().$hm.remove(&$id);
@@ -347,16 +371,18 @@ macro_rules! drop_evt {
 impl Webview {
     pub fn on_dom_ready(&self, fun: impl FnMut() + 'static) -> Option<u64> {
         handle_evt!(
+            webview,
             self,
             on_dom_ready_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void),
             fun -> dyn FnMut() + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY,
             on_dom_ready_handlers
-        );
+        )
     }
 
     pub fn on_navigated(&self, fun: impl FnMut(&str) + 'static) -> Option<u64> {
         handle_evt!(
+            webview,
             self,
             on_navigated_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void, *mut c_char),
             fun -> dyn FnMut(&str) + 'static,
@@ -367,6 +393,7 @@ impl Webview {
 
     pub fn on_title(&self, fun: impl FnMut(&str) + 'static) -> Option<u64> {
         handle_evt!(
+            webview,
             self,
             on_title_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void, *mut c_char),
             fun -> dyn FnMut(&str) + 'static,
@@ -375,16 +402,121 @@ impl Webview {
         )
     }
 
+    pub fn on_decorated(&self, fun: impl FnMut(bool) + 'static) -> Option<u64> {
+        handle_evt!(
+            window,
+            self,
+            on_decorated_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void, bool),
+            fun -> dyn FnMut(bool) + 'static,
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED,
+            on_decorated_handlers
+        )
+    }
+
+    pub fn on_maximize(&self, fun: impl FnMut(bool) + 'static) -> Option<u64> {
+        handle_evt!(
+            window,
+            self,
+            on_maximize_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void, bool),
+            fun -> dyn FnMut(bool) + 'static,
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE,
+            on_maximize_handlers
+        )
+    }
+
+    pub fn on_minimize(&self, fun: impl FnMut(bool) + 'static) -> Option<u64> {
+        handle_evt!(
+            window,
+            self,
+            on_minimize_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void, bool),
+            fun -> dyn FnMut(bool) + 'static,
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE,
+            on_minimize_handlers
+        )
+    }
+
+    pub fn on_closed(&self, fun: impl FnMut() + 'static) -> Option<u64> {
+        handle_evt!(
+            window,
+            self,
+            on_closed_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void),
+            fun -> dyn FnMut() + 'static,
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED,
+            on_closed_handlers
+        )
+    }
+
+    pub fn on_resize(&self, fun: impl FnMut(i32, i32) + 'static) -> Option<u64> {
+        handle_evt!(
+            window,
+            self,
+            on_resize_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void, i32, i32),
+            fun -> dyn FnMut(i32, i32) + 'static,
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE,
+            on_resize_handlers
+        )
+    }
+
+    pub fn on_focus(&self, fun: impl FnMut(bool) + 'static) -> Option<u64> {
+        handle_evt!(
+            window,
+            self,
+            on_focus_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void, bool),
+            fun -> dyn FnMut(bool) + 'static,
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS,
+            on_focus_handlers
+        )
+    }
+
+    pub fn on_close(&self, fun: impl FnMut() -> bool + 'static) -> Option<u64> {
+        handle_evt!(
+            window,
+            self,
+            on_close_trampoline -> unsafe extern "C" fn(*mut saucer_handle, *mut c_void) ->  SAUCER_POLICY,
+            fun -> dyn FnMut() -> bool + 'static,
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE,
+            on_close_handlers
+        )
+    }
+
     pub fn off_dom_ready(&self, id: u64) {
-        drop_evt!(self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY, on_dom_ready_handlers);
+        drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY, on_dom_ready_handlers)
     }
 
     pub fn off_navigated(&self, id: u64) {
-        drop_evt!(self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED, on_navigated_handlers);
+        drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED, on_navigated_handlers)
     }
 
     pub fn off_title(&self, id: u64) {
-        drop_evt!(self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_handlers);
+        drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_handlers)
+    }
+
+    pub fn off_decorated(&self, id: u64) {
+        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED, on_decorated_handlers)
+    }
+
+    pub fn off_maximize(&self, id: u64) {
+        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE, on_maximize_handlers)
+    }
+
+    pub fn off_minimize(&self, id: u64) {
+        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE, on_minimize_handlers)
+    }
+
+    pub fn off_closed(&self, id: u64) {
+        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED, on_closed_handlers)
+    }
+
+    pub fn off_resize(&self, id: u64) {
+        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE, on_resize_handlers)
+    }
+
+    pub fn off_focus(&self, id: u64) {
+        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS, on_focus_handlers)
+    }
+
+    pub fn off_close(&self, id: u64) {
+        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE, on_close_handlers)
     }
 }
 
@@ -403,10 +535,47 @@ extern "C" fn on_navigated_trampoline(_: *mut saucer_handle, arg: *mut c_void, u
     rc.borrow_mut()(&url);
 }
 
-extern "C" fn on_title_trampoline(_: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
-    let url = unc!(url);
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(&str)>>>) };
+extern "C" fn on_title_trampoline(h: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
+    on_navigated_trampoline(h, arg, url);
+}
+
+extern "C" fn on_decorated_trampoline(_: *mut saucer_handle, arg: *mut c_void, b: bool) {
+    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(bool)>>>) };
     let rc = (*bb).clone();
     let _ = Box::into_raw(bb);
-    rc.borrow_mut()(&url);
+    rc.borrow_mut()(b);
+}
+
+extern "C" fn on_maximize_trampoline(h: *mut saucer_handle, arg: *mut c_void, b: bool) {
+    on_decorated_trampoline(h, arg, b);
+}
+
+extern "C" fn on_minimize_trampoline(h: *mut saucer_handle, arg: *mut c_void, b: bool) {
+    on_decorated_trampoline(h, arg, b);
+}
+
+extern "C" fn on_closed_trampoline(h: *mut saucer_handle, arg: *mut c_void) { on_dom_ready_trampoline(h, arg); }
+
+extern "C" fn on_resize_trampoline(_: *mut saucer_handle, arg: *mut c_void, w: i32, h: i32) {
+    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(i32, i32)>>>) };
+    let rc = (*bb).clone();
+    let _ = Box::into_raw(bb);
+    rc.borrow_mut()(w, h);
+}
+
+extern "C" fn on_focus_trampoline(h: *mut saucer_handle, arg: *mut c_void, b: bool) {
+    on_decorated_trampoline(h, arg, b);
+}
+
+extern "C" fn on_close_trampoline(_: *mut saucer_handle, arg: *mut c_void) -> SAUCER_POLICY {
+    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut() -> bool>>>) };
+    let rc = (*bb).clone();
+    let _ = Box::into_raw(bb);
+    let rr = rc.borrow_mut()();
+
+    if rr {
+        SAUCER_POLICY_SAUCER_POLICY_ALLOW
+    } else {
+        SAUCER_POLICY_SAUCER_POLICY_BLOCK
+    }
 }

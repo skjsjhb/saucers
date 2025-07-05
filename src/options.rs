@@ -1,9 +1,9 @@
+use std::ffi::CString;
 use std::ffi::c_char;
 use std::ffi::c_int;
-use std::ffi::CString;
 use std::marker::PhantomData;
-use std::ptr::null_mut;
 use std::ptr::NonNull;
+use std::ptr::null_mut;
 
 use crate::capi::*;
 
@@ -11,7 +11,7 @@ use crate::capi::*;
 pub struct AppOptions {
     inner: NonNull<saucer_options>,
     args: Option<(*mut *mut c_char, usize, usize)>,
-    _owns: PhantomData<saucer_options>,
+    _owns: PhantomData<saucer_options>
 }
 
 unsafe impl Send for AppOptions {}
@@ -47,12 +47,12 @@ impl AppOptions {
         Self {
             inner: NonNull::new(ptr).expect("Failed to create options"),
             args: None,
-            _owns: PhantomData,
+            _owns: PhantomData
         }
     }
 
     /// Sets arguments passed to the app.
-    pub fn set_args(&mut self, args: impl IntoIterator<Item=impl AsRef<str>>) {
+    pub fn set_args(&mut self, args: impl IntoIterator<Item = impl AsRef<str>>) {
         let mut v: Vec<*mut c_char> = args
             .into_iter()
             .map(|a| CString::new(a.as_ref()).unwrap().into_raw())
