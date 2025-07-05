@@ -200,6 +200,37 @@ extern "C"
         std::unreachable();
     }
 
+    void saucer_window_once_with_arg(saucer_handle *handle, SAUCER_WINDOW_EVENT event, void *callback, void *arg) {
+        using saucer::window_event;
+        using events = saucer::window::events;
+
+        switch (event) {
+            case SAUCER_WINDOW_EVENT_DECORATED:
+                return handle->once<window_event::decorated>(
+                    bindings::callback_with_arg<events::type<window_event::decorated> >(handle, callback, arg));
+            case SAUCER_WINDOW_EVENT_CLOSE:
+                return handle->once<window_event::close>(
+                    bindings::callback_with_arg<events::type<window_event::close> >(handle, callback, arg));
+            case SAUCER_WINDOW_EVENT_CLOSED:
+                return handle->once<window_event::closed>(
+                    bindings::callback_with_arg<events::type<window_event::closed> >(handle, callback, arg));
+            case SAUCER_WINDOW_EVENT_FOCUS:
+                return handle->once<window_event::focus>(
+                    bindings::callback_with_arg<events::type<window_event::focus> >(handle, callback, arg));
+            case SAUCER_WINDOW_EVENT_MINIMIZE:
+                return handle->once<window_event::minimize>(
+                    bindings::callback_with_arg<events::type<window_event::minimize> >(handle, callback, arg));
+            case SAUCER_WINDOW_EVENT_MAXIMIZE:
+                return handle->once<window_event::maximize>(
+                    bindings::callback_with_arg<events::type<window_event::maximize> >(handle, callback, arg));
+            case SAUCER_WINDOW_EVENT_RESIZE:
+                return handle->once<window_event::resize>(
+                    bindings::callback_with_arg<events::type<window_event::resize> >(handle, callback, arg));
+        }
+
+        std::unreachable();
+    }
+
     uint64_t saucer_window_on(saucer_handle *handle, SAUCER_WINDOW_EVENT event, void *callback)
     {
         using saucer::window_event;
@@ -228,6 +259,37 @@ extern "C"
         case SAUCER_WINDOW_EVENT_RESIZE:
             return handle->on<window_event::resize>(
                 bindings::callback<events::type<window_event::resize>>(handle, callback));
+        }
+
+        std::unreachable();
+    }
+
+    uint64_t saucer_window_on_with_arg(saucer_handle *handle, SAUCER_WINDOW_EVENT event, void *callback, void *arg) {
+        using saucer::window_event;
+        using events = saucer::window::events;
+
+        switch (event) {
+            case SAUCER_WINDOW_EVENT_DECORATED:
+                return handle->on<window_event::decorated>(
+                    bindings::callback_with_arg<events::type<window_event::decorated> >(handle, callback, arg));
+            case SAUCER_WINDOW_EVENT_CLOSE:
+                return handle->on<window_event::close>(
+                    bindings::callback_with_arg<events::type<window_event::close> >(handle, callback, arg));
+            case SAUCER_WINDOW_EVENT_CLOSED:
+                return handle->on<window_event::closed>(
+                    bindings::callback_with_arg<events::type<window_event::closed> >(handle, callback, arg));
+            case SAUCER_WINDOW_EVENT_FOCUS:
+                return handle->on<window_event::focus>(
+                    bindings::callback_with_arg<events::type<window_event::focus> >(handle, callback, arg));
+            case SAUCER_WINDOW_EVENT_MINIMIZE:
+                return handle->on<window_event::minimize>(
+                    bindings::callback_with_arg<events::type<window_event::minimize> >(handle, callback, arg));
+            case SAUCER_WINDOW_EVENT_MAXIMIZE:
+                return handle->on<window_event::maximize>(
+                    bindings::callback_with_arg<events::type<window_event::maximize> >(handle, callback, arg));
+            case SAUCER_WINDOW_EVENT_RESIZE:
+                return handle->on<window_event::resize>(
+                    bindings::callback_with_arg<events::type<window_event::resize> >(handle, callback, arg));
         }
 
         std::unreachable();

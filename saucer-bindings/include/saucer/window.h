@@ -92,7 +92,14 @@ extern "C"
      */
 
     SAUCER_EXPORT void saucer_window_once(saucer_handle *, SAUCER_WINDOW_EVENT event, void *callback);
+
+    SAUCER_EXPORT void saucer_window_once_with_arg(saucer_handle *, SAUCER_WINDOW_EVENT event, void *callback,
+                                                   void *arg);
+
     SAUCER_EXPORT uint64_t saucer_window_on(saucer_handle *, SAUCER_WINDOW_EVENT event, void *callback);
+
+    SAUCER_EXPORT uint64_t saucer_window_on_with_arg(saucer_handle *, SAUCER_WINDOW_EVENT event, void *callback,
+                                                     void *arg);
 
 #ifdef __cplusplus
 }
