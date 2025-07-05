@@ -20,6 +20,17 @@ fn webview_test() {
     w.set_title("Saucers");
     w.show();
 
+    w.on_closed({
+        let arc = arc.clone();
+        move || {
+            let _ = &arc;
+        }
+    });
+
+    w.clear_closed();
+
+    assert_eq!(Arc::strong_count(&arc), 1, "Cleared event handlers should be dropped");
+
     let id = w
         .on_dom_ready({
             let w = w.clone();

@@ -400,6 +400,10 @@ macro_rules! drop_evt {
 
     (window, $sf:ident, $id:ident : $chn:expr, $hm:ident) => {{ drop_evt!($sf, $id : $chn, $hm, saucer_window_remove) }};
 
+    (webview, $sf:ident, * : $chn:expr, $hm:ident) => {{ drop_evt!($sf, * : $chn, $hm, saucer_webview_clear) }};
+
+    (window, $sf:ident, * : $chn:expr, $hm:ident) => {{ drop_evt!($sf, * : $chn, $hm, saucer_window_clear) }};
+
     ($sf:ident, $id:ident : $chn:expr, $hm:ident, $capi:ident) => {{
         if !$sf.is_event_thread() {
             return;
@@ -411,6 +415,19 @@ macro_rules! drop_evt {
         let old = guard.ptr.as_mut().unwrap().$hm.remove(&$id);
         if let Some(pt) = old {
             unsafe { drop(Box::from_raw(pt)) }
+        }
+    }};
+
+    ($sf:ident, * : $chn:expr, $hm:ident, $capi:ident) => {{
+        if !$sf.is_event_thread() {
+            return;
+        }
+
+        unsafe { $capi($sf.as_ptr(), $chn) }
+
+        let mut guard = $sf.0.write().unwrap();
+        for (_, v) in guard.ptr.as_mut().unwrap().$hm.drain() {
+            unsafe { drop(Box::from_raw(v)) }
         }
     }};
 }
@@ -714,6 +731,46 @@ impl Webview {
 
     pub fn off_close(&self, id: u64) {
         drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE, on_close_handlers)
+    }
+
+    pub fn clear_dom_ready(&self) {
+        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY, on_dom_ready_handlers);
+    }
+
+    pub fn clear_navigated(&self) {
+        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED, on_navigated_handlers);
+    }
+
+    pub fn clear_title(&self) {
+        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_handlers);
+    }
+
+    pub fn clear_decorated(&self) {
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED, on_decorated_handlers);
+    }
+
+    pub fn clear_maximize(&self) {
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE, on_maximize_handlers);
+    }
+
+    pub fn clear_minimize(&self) {
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE, on_minimize_handlers);
+    }
+
+    pub fn clear_closed(&self) {
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED, on_closed_handlers);
+    }
+
+    pub fn clear_resize(&self) {
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE, on_resize_handlers);
+    }
+
+    pub fn clear_focus(&self) {
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS, on_focus_handlers);
+    }
+
+    pub fn clear_close(&self) {
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE, on_close_handlers);
     }
 }
 
