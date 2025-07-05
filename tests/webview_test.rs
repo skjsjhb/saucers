@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use saucers::app::App;
@@ -45,7 +47,33 @@ fn webview_test() {
 
     assert_eq!(Arc::strong_count(&arc), 1, "Cleared event handlers should be dropped");
 
-    let id = w
+    // This will not be fired, so we can validate whether auto-dropping for once handlers works
+    w.once_minimize({
+        let arc = arc.clone();
+        move |_| {
+            let _ = &arc;
+        }
+    });
+
+    // Checks concurrent modification
+    // The event handler is checked to be able to remove itself properly if the `Arc` is not leaked
+    let id = Arc::new(AtomicU64::new(0));
+    id.store(
+        w.on_dom_ready({
+            let id = id.clone();
+            let w = w.clone();
+            let arc = arc.clone();
+            move || {
+                let id = id.load(Ordering::Relaxed);
+                w.off_dom_ready(id);
+                let _ = &arc;
+            }
+        })
+        .unwrap(),
+        Ordering::Relaxed
+    );
+
+    let id1 = w
         .on_dom_ready({
             let arc = arc.clone();
             move || {
@@ -54,15 +82,14 @@ fn webview_test() {
         })
         .unwrap();
 
-    let id1 = w
-        .on_title({
-            let arc = arc.clone();
-            move |title: &str| {
-                let _ = &arc;
-                tx.send(title.to_owned()).unwrap();
-            }
-        })
-        .unwrap();
+    w.on_title({
+        let arc = arc.clone();
+        move |title: &str| {
+            let _ = &arc;
+            tx.send(title.to_owned()).unwrap();
+        }
+    })
+    .unwrap();
 
     w.once_closed({
         let app = app.clone();
@@ -88,8 +115,8 @@ fn webview_test() {
         "Event handler should receive correct arguments"
     );
 
-    w.off_dom_ready(id);
-    w.off_title(id1);
+    w.off_dom_ready(id1);
+    w.clear_title();
     w.off_message();
 
     w.once_closed({

@@ -29,35 +29,11 @@ struct WebviewPtr {
     _owns: PhantomData<saucer_handle>,
     _counter: Arc<()>,
 
-    on_dom_ready_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut()>>>>,
-    on_navigate_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(WebviewNavigation) -> bool>>>>,
-    on_navigated_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(&str)>>>>,
-    on_title_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(&str)>>>>,
-    on_favicon_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(Icon)>>>>,
-    on_load_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(WebviewLoadState)>>>>,
+    web_event_droppers: HashMap<(SAUCER_WEB_EVENT, u64), Box<dyn FnOnce() + 'static>>,
+    window_event_droppers: HashMap<(SAUCER_WINDOW_EVENT, u64), Box<dyn FnOnce() + 'static>>,
 
-    on_decorated_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(bool)>>>>,
-    on_maximize_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(bool)>>>>,
-    on_minimize_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(bool)>>>>,
-    on_closed_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut()>>>>,
-    on_resize_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(i32, i32)>>>>,
-    on_focus_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut(bool)>>>>,
-    on_close_handlers: HashMap<u64, *mut Rc<RefCell<Box<dyn FnMut() -> bool>>>>,
-
-    once_dom_ready_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce()>>>>>,
-    once_navigate_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(WebviewNavigation) -> bool>>>>>,
-    once_navigated_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(&str)>>>>>,
-    once_title_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(&str)>>>>>,
-    once_favicon_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(Icon)>>>>>,
-    once_load_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(WebviewLoadState)>>>>>,
-
-    once_decorated_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(bool)>>>>>,
-    once_maximize_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(bool)>>>>>,
-    once_minimize_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(bool)>>>>>,
-    once_closed_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce()>>>>>,
-    once_resize_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(i32, i32)>>>>>,
-    once_focus_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce(bool)>>>>>,
-    once_close_handlers: Vec<*mut Rc<RefCell<Option<Box<dyn FnOnce() -> bool>>>>>
+    // A pair of (checker, dropper), checker returns whether the dropper can be removed
+    once_event_droppers: Vec<(Box<dyn FnMut() -> bool + 'static>, Box<dyn FnOnce() + 'static>)>
 }
 
 unsafe impl Send for WebviewPtr {}
@@ -76,44 +52,18 @@ impl Collect for WebviewPtr {
                 drop(Box::from_raw(ptr));
             }
 
-            drop_handlers(self.on_dom_ready_handlers);
-            drop_handlers(self.on_navigated_handlers);
-            drop_handlers(self.on_title_handlers);
-            drop_handlers(self.on_load_handlers);
+            for dropper in self.web_event_droppers.into_values() {
+                dropper();
+            }
 
-            drop_handlers(self.on_decorated_handlers);
-            drop_handlers(self.on_maximize_handlers);
-            drop_handlers(self.on_minimize_handlers);
-            drop_handlers(self.on_closed_handlers);
-            drop_handlers(self.on_resize_handlers);
-            drop_handlers(self.on_focus_handlers);
-            drop_handlers(self.on_close_handlers);
+            for dropper in self.window_event_droppers.into_values() {
+                dropper();
+            }
 
-            drop_once_handlers(self.once_dom_ready_handlers);
-            drop_once_handlers(self.once_navigated_handlers);
-            drop_once_handlers(self.once_title_handlers);
-            drop_once_handlers(self.once_load_handlers);
-
-            drop_once_handlers(self.once_decorated_handlers);
-            drop_once_handlers(self.once_maximize_handlers);
-            drop_once_handlers(self.once_minimize_handlers);
-            drop_once_handlers(self.once_closed_handlers);
-            drop_once_handlers(self.once_resize_handlers);
-            drop_once_handlers(self.once_focus_handlers);
-            drop_once_handlers(self.once_close_handlers);
+            for (_, dropper) in self.once_event_droppers {
+                dropper();
+            }
         }
-    }
-}
-
-fn drop_handlers<T>(hm: HashMap<u64, *mut T>) {
-    for ptr in hm.into_values() {
-        unsafe { drop(Box::from_raw(ptr)) }
-    }
-}
-
-fn drop_once_handlers<T>(hm: Vec<*mut T>) {
-    for ptr in hm.into_iter() {
-        unsafe { drop(Box::from_raw(ptr)) }
     }
 }
 
@@ -419,11 +369,15 @@ pub enum WebviewLoadState {
 }
 
 macro_rules! handle_evt {
-    (webview, $sf:ident, $cfn:ident, $fun:ident -> $rtp:ty, $chn:expr, $hm:ident) => {{ handle_evt!($sf, $cfn, $fun -> $rtp, $chn, $hm, saucer_webview_on_with_arg) }};
+    (webview, $sf:ident, $cfn:ident, $fun:ident -> $rtp:ty, $chn:expr) => {{
+        handle_evt!($sf, $cfn, $fun -> $rtp, $chn, web_event_droppers, saucer_webview_on_with_arg);
+    }};
 
-    (window, $sf:ident, $cfn:ident, $fun:ident -> $rtp:ty, $chn:expr, $hm:ident) => {{ handle_evt!($sf, $cfn, $fun -> $rtp, $chn, $hm, saucer_window_on_with_arg) }};
+    (window, $sf:ident, $cfn:ident, $fun:ident -> $rtp:ty, $chn:expr) => {{
+        handle_evt!($sf, $cfn, $fun -> $rtp, $chn, window_event_droppers, saucer_window_on_with_arg);
+    }};
 
-    ($sf:ident, $cfn:ident, $fun:ident -> $rtp:ty, $chn:expr, $hm:ident, $capi:ident) => {{
+    ($sf:ident, $cfn:ident, $fun:ident -> $rtp:ty, $chn:expr, $dm:ident, $capi:ident) => {{
         if !$sf.is_event_thread() {
             return None;
         }
@@ -433,13 +387,15 @@ macro_rules! handle_evt {
         let id = unsafe { $capi($sf.as_ptr(), $chn, $cfn as *mut c_void, ptr as *mut c_void) };
 
         let mut guard = $sf.0.write().unwrap();
+        let key = ($chn, id);
+        let dropper = Box::new(move || unsafe { drop(Box::from_raw(ptr)) });
 
-        let old = guard.ptr.as_mut().unwrap().$hm.insert(id, ptr);
+        let old = guard.ptr.as_mut().unwrap().$dm.insert(key, dropper);
 
         // This is unlikely to happen as no two event handlers shall share the same ID.
         // This drop is reserved here in case.
-        if let Some(pt) = old {
-            unsafe { drop(Box::from_raw(pt)) }
+        if let Some(old_dropper) = old {
+            old_dropper();
         }
 
         return Some(id);
@@ -447,15 +403,15 @@ macro_rules! handle_evt {
 }
 
 macro_rules! drop_evt {
-    (webview, $sf:ident, $id:ident : $chn:expr, $hm:ident) => {{ drop_evt!($sf, $id : $chn, $hm, saucer_webview_remove) }};
+    (webview, $sf:ident, $id:ident : $chn:expr) => {{ drop_evt!($sf, $id : $chn, web_event_droppers, saucer_webview_remove) }};
 
-    (window, $sf:ident, $id:ident : $chn:expr, $hm:ident) => {{ drop_evt!($sf, $id : $chn, $hm, saucer_window_remove) }};
+    (window, $sf:ident, $id:ident : $chn:expr) => {{ drop_evt!($sf, $id : $chn, window_event_droppers, saucer_window_remove) }};
 
-    (webview, $sf:ident, * : $chn:expr, $hm:ident) => {{ drop_evt!($sf, * : $chn, $hm, saucer_webview_clear) }};
+    (webview, $sf:ident, * : $chn:expr) => {{ drop_evt!($sf, * : $chn, web_event_droppers, saucer_webview_clear) }};
 
-    (window, $sf:ident, * : $chn:expr, $hm:ident) => {{ drop_evt!($sf, * : $chn, $hm, saucer_window_clear) }};
+    (window, $sf:ident, * : $chn:expr) => {{ drop_evt!($sf, * : $chn, window_event_droppers, saucer_window_clear) }};
 
-    ($sf:ident, $id:ident : $chn:expr, $hm:ident, $capi:ident) => {{
+    ($sf:ident, $id:ident : $chn:expr, $dm:ident, $capi:ident) => {{
         if !$sf.is_event_thread() {
             return;
         }
@@ -463,13 +419,14 @@ macro_rules! drop_evt {
         unsafe { $capi($sf.as_ptr(), $chn, $id) }
 
         let mut guard = $sf.0.write().unwrap();
-        let old = guard.ptr.as_mut().unwrap().$hm.remove(&$id);
-        if let Some(pt) = old {
-            unsafe { drop(Box::from_raw(pt)) }
+        let key = ($chn, $id);
+        let old = guard.ptr.as_mut().unwrap().$dm.remove(&key);
+        if let Some(dropper) = old {
+            dropper();
         }
     }};
 
-    ($sf:ident, * : $chn:expr, $hm:ident, $capi:ident) => {{
+    ($sf:ident, * : $chn:expr, $dm:ident, $capi:ident) => {{
         if !$sf.is_event_thread() {
             return;
         }
@@ -477,18 +434,18 @@ macro_rules! drop_evt {
         unsafe { $capi($sf.as_ptr(), $chn) }
 
         let mut guard = $sf.0.write().unwrap();
-        for (_, v) in guard.ptr.as_mut().unwrap().$hm.drain() {
-            unsafe { drop(Box::from_raw(v)) }
+        for (_, dropper) in guard.ptr.as_mut().unwrap().$dm.drain() {
+            dropper();
         }
     }};
 }
 
 macro_rules! handle_evt_once {
-    (webview, $sf:ident, $cfn:ident, $fun:ident -> $rtp:ty, $chn:expr, $hm:ident) => {{ handle_evt_once!($sf, $cfn, $fun -> $rtp, $chn, $hm, saucer_webview_on_with_arg) }};
+    (webview, $sf:ident, $cfn:ident, $fun:ident -> $rtp:ty, $chn:expr) => {{ handle_evt_once!($sf, $cfn, $fun -> $rtp, $chn, saucer_webview_on_with_arg) }};
 
-    (window, $sf:ident, $cfn:ident, $fun:ident -> $rtp:ty, $chn:expr, $hm:ident) => {{ handle_evt_once!($sf, $cfn, $fun -> $rtp, $chn, $hm, saucer_window_on_with_arg) }};
+    (window, $sf:ident, $cfn:ident, $fun:ident -> $rtp:ty, $chn:expr) => {{ handle_evt_once!($sf, $cfn, $fun -> $rtp, $chn, saucer_window_on_with_arg) }};
 
-    ($sf:ident, $cfn:ident, $fun:ident -> $rtp:ty, $chn:expr, $hm:ident, $capi:ident) => {{
+    ($sf:ident, $cfn:ident, $fun:ident -> $rtp:ty, $chn:expr, $capi:ident) => {{
         if !$sf.is_event_thread() {
             return;
         }
@@ -502,24 +459,38 @@ macro_rules! handle_evt_once {
         }
 
         let mut guard = $sf.0.write().unwrap();
-        let v = &mut guard.ptr.as_mut().unwrap().$hm;
-        v.push(ptr);
 
-        // Cleanup pointers already executed
-        v.retain(|it| {
-            let bb = unsafe { Box::from_raw(*it) };
-            let save = if let Ok(inner) = bb.try_borrow() {
-                inner.is_some()
+        // Returns true if the dropper can be removed
+        let checker = Box::new(move || {
+            let bb = unsafe { Box::from_raw(ptr) };
+            let rt = if let Ok(opt) = bb.try_borrow() {
+                opt.is_none() // The once handler has been executed
             } else {
-                true
+                false
             };
-
-            if save {
-                let _ = Box::into_raw(bb);
-            }
-
-            save
+            let _ = Box::into_raw(bb);
+            rt
         });
+
+        let dropper = Box::new(move || unsafe { drop(Box::from_raw(ptr)) });
+
+        let v = &mut guard.ptr.as_mut().unwrap().once_event_droppers;
+
+        v.push((checker, dropper));
+
+        // Tries to cleanup no-op droppers (managed handler has been executed)
+        let mut i = 0;
+
+        // Ignore the newly added pair
+        while i < v.len() - 1 {
+            if v[i].0() {
+                let (_, dropper) = v.swap_remove(i);
+                // The pointer needs to be collected even if the handler has already been dropped
+                dropper();
+            } else {
+                i += 1;
+            }
+        }
     }};
 }
 
@@ -530,8 +501,7 @@ impl Webview {
             self,
             once_dom_ready_trampoline,
             fun -> dyn FnOnce() + 'static,
-            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY,
-            once_dom_ready_handlers
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY
         )
     }
 
@@ -541,8 +511,7 @@ impl Webview {
             self,
             once_navigate_trampoline,
             fun -> dyn FnOnce(WebviewNavigation) -> bool + 'static,
-            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE,
-            once_navigate_handlers
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE
         )
     }
 
@@ -552,8 +521,7 @@ impl Webview {
             self,
             once_navigated_trampoline,
             fun -> dyn FnOnce(&str) + 'static,
-            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED,
-            once_navigated_handlers
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED
         )
     }
 
@@ -563,8 +531,7 @@ impl Webview {
             self,
             once_title_trampoline,
             fun -> dyn FnOnce(&str) + 'static,
-            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE,
-            once_title_handlers
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE
         )
     }
 
@@ -574,8 +541,7 @@ impl Webview {
             self,
             once_favicon_trampoline,
             fun -> dyn FnOnce(Icon) + 'static,
-            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON,
-            once_favicon_handlers
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON
         )
     }
 
@@ -585,8 +551,7 @@ impl Webview {
             self,
             once_load_trampoline,
             fun -> dyn FnOnce(WebviewLoadState) + 'static,
-            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD,
-            once_load_handlers
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD
         )
     }
 
@@ -596,8 +561,7 @@ impl Webview {
             self,
             once_decorated_trampoline,
             fun -> dyn FnOnce(bool) + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED,
-            once_decorated_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED
         )
     }
 
@@ -607,8 +571,7 @@ impl Webview {
             self,
             once_maximize_trampoline,
             fun -> dyn FnOnce(bool) + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE,
-            once_maximize_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE
         )
     }
 
@@ -618,8 +581,7 @@ impl Webview {
             self,
             once_minimize_trampoline,
             fun -> dyn FnOnce(bool) + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE,
-            once_minimize_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE
         )
     }
 
@@ -629,8 +591,7 @@ impl Webview {
             self,
             once_closed_trampoline,
             fun -> dyn FnOnce() + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED,
-            once_closed_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED
         )
     }
 
@@ -640,8 +601,7 @@ impl Webview {
             self,
             once_resize_trampoline,
             fun -> dyn FnOnce(i32, i32) + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE,
-            once_resize_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE
         )
     }
 
@@ -651,8 +611,7 @@ impl Webview {
             self,
             once_focus_trampoline,
             fun -> dyn FnOnce(bool) + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS,
-            once_focus_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS
         )
     }
 
@@ -662,8 +621,7 @@ impl Webview {
             self,
             once_close_trampoline,
             fun -> dyn FnOnce() -> bool + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE,
-            once_close_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE
         )
     }
 
@@ -673,8 +631,7 @@ impl Webview {
             self,
             on_dom_ready_trampoline,
             fun -> dyn FnMut() + 'static,
-            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY,
-            on_dom_ready_handlers
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY
         )
     }
 
@@ -684,8 +641,7 @@ impl Webview {
             self,
             on_navigate_trampoline,
             fun -> dyn FnMut(WebviewNavigation) -> bool + 'static,
-            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE,
-            on_navigate_handlers
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE
         )
     }
 
@@ -695,8 +651,7 @@ impl Webview {
             self,
             on_navigated_trampoline,
             fun -> dyn FnMut(&str) + 'static,
-            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED,
-            on_navigated_handlers
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED
         )
     }
 
@@ -706,8 +661,7 @@ impl Webview {
             self,
             on_title_trampoline,
             fun -> dyn FnMut(&str) + 'static,
-            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE,
-            on_title_handlers
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE
         )
     }
 
@@ -717,8 +671,7 @@ impl Webview {
             self,
             on_favicon_trampoline,
             fun -> dyn FnMut(Icon) + 'static,
-            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON,
-            on_favicon_handlers
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON
         )
     }
 
@@ -728,8 +681,7 @@ impl Webview {
             self,
             on_load_trampoline,
             fun -> dyn FnMut(WebviewLoadState) + 'static,
-            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD,
-            on_load_handlers
+            SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD
         )
     }
 
@@ -739,8 +691,7 @@ impl Webview {
             self,
             on_decorated_trampoline,
             fun -> dyn FnMut(bool) + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED,
-            on_decorated_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED
         )
     }
 
@@ -750,8 +701,7 @@ impl Webview {
             self,
             on_maximize_trampoline,
             fun -> dyn FnMut(bool) + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE,
-            on_maximize_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE
         )
     }
 
@@ -761,8 +711,7 @@ impl Webview {
             self,
             on_minimize_trampoline,
             fun -> dyn FnMut(bool) + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE,
-            on_minimize_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE
         )
     }
 
@@ -772,8 +721,7 @@ impl Webview {
             self,
             on_closed_trampoline,
             fun -> dyn FnMut() + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED,
-            on_closed_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED
         )
     }
 
@@ -783,8 +731,7 @@ impl Webview {
             self,
             on_resize_trampoline ,
             fun -> dyn FnMut(i32, i32) + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE,
-            on_resize_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE
         )
     }
 
@@ -794,8 +741,7 @@ impl Webview {
             self,
             on_focus_trampoline ,
             fun -> dyn FnMut(bool) + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS,
-            on_focus_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS
         )
     }
 
@@ -805,113 +751,92 @@ impl Webview {
             self,
             on_close_trampoline,
             fun -> dyn FnMut() -> bool + 'static,
-            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE,
-            on_close_handlers
+            SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE
         )
     }
 
-    pub fn off_dom_ready(&self, id: u64) {
-        drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY, on_dom_ready_handlers)
-    }
+    pub fn off_dom_ready(&self, id: u64) { drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY) }
 
-    pub fn off_navigate(&self, id: u64) {
-        drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE, on_navigate_handlers)
-    }
+    pub fn off_navigate(&self, id: u64) { drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE) }
 
-    pub fn off_navigated(&self, id: u64) {
-        drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED, on_navigated_handlers)
-    }
+    pub fn off_navigated(&self, id: u64) { drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED) }
 
-    pub fn off_title(&self, id: u64) {
-        drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_handlers)
-    }
+    pub fn off_title(&self, id: u64) { drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE) }
 
-    pub fn off_favicon(&self, id: u64) {
-        drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON, on_favicon_handlers)
-    }
+    pub fn off_favicon(&self, id: u64) { drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON) }
 
-    pub fn off_load(&self, id: u64) {
-        drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD, on_load_handlers)
-    }
+    pub fn off_load(&self, id: u64) { drop_evt!(webview, self, id : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD) }
 
     pub fn off_decorated(&self, id: u64) {
-        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED, on_decorated_handlers)
+        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED)
     }
 
     pub fn off_maximize(&self, id: u64) {
-        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE, on_maximize_handlers)
+        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE)
     }
 
     pub fn off_minimize(&self, id: u64) {
-        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE, on_minimize_handlers)
+        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE)
     }
 
-    pub fn off_closed(&self, id: u64) {
-        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED, on_closed_handlers)
-    }
+    pub fn off_closed(&self, id: u64) { drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED) }
 
-    pub fn off_resize(&self, id: u64) {
-        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE, on_resize_handlers)
-    }
+    pub fn off_resize(&self, id: u64) { drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE) }
 
-    pub fn off_focus(&self, id: u64) {
-        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS, on_focus_handlers)
-    }
+    pub fn off_focus(&self, id: u64) { drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS) }
 
-    pub fn off_close(&self, id: u64) {
-        drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE, on_close_handlers)
-    }
+    pub fn off_close(&self, id: u64) { drop_evt!(window, self, id : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE) }
 
     pub fn clear_dom_ready(&self) {
-        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY, on_dom_ready_handlers);
+        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY);
     }
 
     pub fn clear_navigate(&self) {
-        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE, on_navigate_handlers);
+        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE);
     }
 
     pub fn clear_navigated(&self) {
-        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED, on_navigated_handlers);
+        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED);
     }
 
     pub fn clear_title(&self) {
-        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_handlers);
+        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE);
     }
 
     pub fn clear_favicon(&self) {
-        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON, on_favicon_handlers);
+        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON);
     }
 
     pub fn clear_load(&self) {
-        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD, on_load_handlers);
+        drop_evt!(webview, self, * : SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD);
     }
 
     pub fn clear_decorated(&self) {
-        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED, on_decorated_handlers);
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED);
     }
 
     pub fn clear_maximize(&self) {
-        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE, on_maximize_handlers);
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE);
     }
 
     pub fn clear_minimize(&self) {
-        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE, on_minimize_handlers);
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE);
     }
 
     pub fn clear_closed(&self) {
-        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED, on_closed_handlers);
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED);
     }
 
     pub fn clear_resize(&self) {
-        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE, on_resize_handlers);
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE);
     }
 
     pub fn clear_focus(&self) {
-        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS, on_focus_handlers);
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS);
     }
 
     pub fn clear_close(&self) {
-        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE, on_close_handlers);
+        drop_evt!(window, self, * : SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE);
     }
 }
 

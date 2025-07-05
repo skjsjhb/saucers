@@ -7,7 +7,7 @@ use crate::stash::Stash;
 
 pub struct EmbedFile<'a> {
     ptr: NonNull<saucer_embedded_file>,
-    stash: Stash<'a>,
+    _stash: Stash<'a>,
     _owns: PhantomData<(saucer_embedded_file, &'a ())>
 }
 
@@ -25,7 +25,7 @@ impl<'a> EmbedFile<'a> {
 
         Self {
             ptr: NonNull::new(ptr).expect("Invalid embedded file"),
-            stash: content,
+            _stash: content,
             _owns: PhantomData
         }
     }
