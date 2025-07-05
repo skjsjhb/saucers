@@ -113,9 +113,25 @@ impl App {
 
     pub fn is_thread_safe(&self) -> bool { self.0.is_host_thread() }
 
-    pub fn run(&self) { unsafe { saucer_application_run(self.0.as_ptr()) } }
+    /// Runs the event loop (blocking).
+    ///
+    /// This method must be called on the event thread, or it does nothing.
+    pub fn run(&self) {
+        if !self.is_thread_safe() {
+            return;
+        }
+        unsafe { saucer_application_run(self.0.as_ptr()) }
+    }
 
-    pub fn run_once(&self) { unsafe { saucer_application_run_once(self.0.as_ptr()) } }
+    /// Runs the event loop (non-blocking).
+    ///
+    /// This method must be called on the event thread, or it does nothing.
+    pub fn run_once(&self) {
+        if !self.is_thread_safe() {
+            return;
+        }
+        unsafe { saucer_application_run_once(self.0.as_ptr()) }
+    }
 
     pub fn pool_submit(&self, fun: impl FnOnce() + Send + 'static) {
         let bb = Box::new(fun) as Box<dyn FnOnce()>;
@@ -139,6 +155,8 @@ impl App {
     }
 
     pub(crate) fn as_ptr(&self) -> *mut saucer_application { self.0.as_ptr() }
+
+    pub(crate) fn get_collector(&self) -> Weak<UnsafeCollector> { self.0.collector.as_ref().unwrap().clone() }
 }
 
 extern "C" fn c_call_trampoline(raw: *mut c_void) {
