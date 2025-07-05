@@ -2,14 +2,60 @@ use std::path::Path;
 use std::path::PathBuf;
 
 fn main() {
-    let dst = cmake::build("saucer-bindings");
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
+
+    let dst = cmake::Config::new("saucer-bindings")
+        .define("SAUCERS_SHARED_LIB", if target_os == "windows" { "OFF" } else { "ON" })
+        .build();
+
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
-    println!("cargo:rustc-link-lib=static=saucer-bindings");
+
+    if target_os == "windows" {
+        let target = std::env::var("CARGO_CFG_TARGET_ENV").unwrap();
+
+        if target != "msvc" {
+            panic!("MSVC is required to link to WebView2");
+        }
+
+        let profile = std::env::var("PROFILE").unwrap();
+        let is_debug = profile == "debug" || profile == "test";
+
+        let arch = match std::env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
+            "x86" => "x86",
+            "x86_64" => "x64",
+            "aarch64" => "arm64",
+            it => panic!("Unsupported architecture: {}", it)
+        };
+        println!(
+            "cargo:rustc-link-search=native={}/build/_deps/saucer-build/nuget/Microsoft.Web.WebView2/build/native/{arch}",
+            dst.display()
+        );
+        println!("cargo:rustc-link-lib=static=saucer-bindings");
+        println!("cargo:rustc-link-lib=static=saucer");
+
+        if is_debug {
+            println!("cargo:rustc-link-lib=static=fmtd");
+        } else {
+            println!("cargo:rustc-link-lib=static=fmt");
+        }
+
+        println!("cargo:rustc-link-lib=static=WebView2LoaderStatic");
+
+        if profile == "debug" || profile == "test" {
+            println!("cargo:rustc-link-lib=dylib=msvcrtd");
+        }
+
+        println!("cargo:rustc-link-lib=dylib=shlwapi");
+        println!("cargo:rustc-link-lib=dylib=gdiplus");
+        println!("cargo:rustc-link-lib=dylib=user32");
+        println!("cargo:rustc-link-lib=dylib=advapi32");
+    } else {
+        println!("cargo:rustc-link-lib=dylib=saucer-bindings");
+        copy_dylib(&dst);
+    }
 
     println!("cargo:rerun-if-changed=src/lib.rs");
     println!("cargo:rerun-if-changed=saucer-bindings/CMakeLists.txt");
-
-    copy_dylib(&dst);
 
     let bindings = bindgen::Builder::default()
         .header("saucer-bindings/include/saucer/all.rs.h")

@@ -7,6 +7,7 @@ project(saucer-bindings LANGUAGES CXX VERSION 5.0.0)
 
 option(saucer_desktop "Enable support for the desktop module" ON)
 option(saucer_pdf "Enable support for the pdf module" ON)
+option(SAUCERS_SHARED_LIB "Build a shared library" ON)
 
 # --------------------------------------------------------------------------------------------------------
 # CMake options
@@ -18,7 +19,12 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Setup library
 # --------------------------------------------------------------------------------------------------------
 
-add_library(${PROJECT_NAME} SHARED)
+if (SAUCERS_SHARED_LIB)
+    add_library(${PROJECT_NAME} SHARED)
+else ()
+    add_library(${PROJECT_NAME} STATIC)
+endif ()
+
 add_library(saucer::bindings ALIAS ${PROJECT_NAME})
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
