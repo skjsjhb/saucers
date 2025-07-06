@@ -27,8 +27,7 @@ pub(crate) struct WebviewPtr {
     _owns: PhantomData<saucer_handle>,
     _counter: Arc<()>,
 
-    pub(crate) web_event_droppers: HashMap<(SAUCER_WEB_EVENT, u64), Box<dyn FnOnce() + 'static>>,
-    pub(crate) window_event_droppers: HashMap<(SAUCER_WINDOW_EVENT, u64), Box<dyn FnOnce() + 'static>>,
+    pub(crate) dyn_event_droppers: HashMap<(u32, u64), Box<dyn FnOnce() + 'static>>,
 
     // A pair of (checker, dropper), checker returns whether the dropper can be removed
     pub(crate) once_event_droppers: Vec<(Box<dyn FnMut() -> bool + 'static>, Box<dyn FnOnce() + 'static>)>
@@ -50,11 +49,7 @@ impl Collect for WebviewPtr {
                 drop(Box::from_raw(ptr));
             }
 
-            for dropper in self.web_event_droppers.into_values() {
-                dropper();
-            }
-
-            for dropper in self.window_event_droppers.into_values() {
+            for dropper in self.dyn_event_droppers.into_values() {
                 dropper();
             }
 
@@ -114,8 +109,7 @@ impl UnsafeWebview {
                 message_handler: None,
                 _owns: PhantomData,
                 _counter: collector.count(),
-                web_event_droppers: HashMap::new(),
-                window_event_droppers: HashMap::new(),
+                dyn_event_droppers: HashMap::new(),
                 once_event_droppers: Vec::new()
             }),
             collector: Some(Arc::downgrade(&collector)),

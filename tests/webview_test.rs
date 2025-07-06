@@ -9,6 +9,11 @@ use saucers::prefs::Preferences;
 use saucers::script::Script;
 use saucers::script::ScriptLoadTime;
 use saucers::webview::Webview;
+use saucers::webview_events::ClosedEvent;
+use saucers::webview_events::DomReadyEvent;
+use saucers::webview_events::FaviconEvent;
+use saucers::webview_events::MinimizeEvent;
+use saucers::webview_events::TitleEvent;
 
 #[test]
 fn webview_test() {
@@ -24,79 +29,102 @@ fn webview_test() {
     w.set_title("Saucers");
     w.show();
 
-    w.on_closed({
-        let arc = arc.clone();
-        move |_| {
-            let _ = &arc;
-        }
-    });
+    w.on(
+        ClosedEvent,
+        Box::new({
+            let arc = arc.clone();
+            move |_| {
+                let _ = &arc;
+            }
+        })
+    );
 
-    w.once_favicon(|_, icon| {
-        assert!(
-            icon.data().data().is_some_and(|it| it.len() > 0),
-            "Icon should be retrieved"
-        );
-    });
+    w.once(
+        FaviconEvent,
+        Box::new({
+            |_, icon| {
+                assert!(
+                    icon.data().data().is_some_and(|it| it.len() > 0),
+                    "Icon should be retrieved"
+                );
+            }
+        })
+    );
 
     w.inject(&Script::new(
         "window.saucer.internal.send_message('')",
         ScriptLoadTime::Ready
     ));
 
-    w.clear_closed();
+    w.clear(ClosedEvent);
 
     assert_eq!(Arc::strong_count(&arc), 1, "Cleared event handlers should be dropped");
 
     // This will not be fired, so we can validate whether auto-dropping for once handlers works
-    w.once_minimize({
-        let arc = arc.clone();
-        move |_, _| {
-            let _ = &arc;
-        }
-    });
+    w.once(
+        MinimizeEvent,
+        Box::new({
+            let arc = arc.clone();
+            move |_, _| {
+                let _ = &arc;
+            }
+        })
+    );
 
     // Checks concurrent modification
     // The event handler is checked to be able to remove itself properly if the `Arc` is not leaked
     let id = Arc::new(AtomicU64::new(0));
     id.store(
-        w.on_dom_ready({
-            let id = id.clone();
-            let arc = arc.clone();
-            move |w| {
-                let id = id.load(Ordering::Relaxed);
-                w.off_dom_ready(id);
-                let _ = &arc;
-            }
-        })
+        w.on(
+            DomReadyEvent,
+            Box::new({
+                let id = id.clone();
+                let arc = arc.clone();
+                move |w| {
+                    let id = id.load(Ordering::Relaxed);
+                    w.off(DomReadyEvent, id);
+                    let _ = &arc;
+                }
+            })
+        )
         .unwrap(),
         Ordering::Relaxed
     );
 
-    w.on_dom_ready({
-        let arc = arc.clone();
-        move |_| {
-            let _ = &arc;
-        }
-    })
+    w.on(
+        DomReadyEvent,
+        Box::new({
+            let arc = arc.clone();
+            move |_| {
+                let _ = &arc;
+            }
+        })
+    )
     .unwrap();
 
-    w.on_title({
-        let arc = arc.clone();
-        move |_, title: &str| {
-            let _ = &arc;
-            tx.send(title.to_owned()).unwrap();
-        }
-    })
+    w.on(
+        TitleEvent,
+        Box::new({
+            let arc = arc.clone();
+            move |_, title: &str| {
+                let _ = &arc;
+                tx.send(title.to_owned()).unwrap();
+            }
+        })
+    )
     .unwrap();
 
-    w.once_closed({
-        let app = app.clone();
-        let arc = arc.clone();
-        move |_| {
-            let _ = &arc;
-            app.quit();
-        }
-    });
+    w.once(
+        ClosedEvent,
+        Box::new({
+            let app = app.clone();
+            let arc = arc.clone();
+            move |_| {
+                let _ = &arc;
+                app.quit();
+            }
+        })
+    );
 
     w.on_message(move |w, _| -> bool {
         w.close();
@@ -110,12 +138,15 @@ fn webview_test() {
         "Event handler should receive correct arguments"
     );
 
-    w.once_closed({
-        let arc = arc.clone();
-        move |_| {
-            let _ = &arc;
-        }
-    });
+    w.once(
+        ClosedEvent,
+        Box::new({
+            let arc = arc.clone();
+            move |_| {
+                let _ = &arc;
+            }
+        })
+    );
 
     std::thread::spawn(move || {
         drop(w);

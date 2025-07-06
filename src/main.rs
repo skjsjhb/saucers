@@ -3,6 +3,8 @@ use saucers::collector::Collector;
 use saucers::options::AppOptions;
 use saucers::prefs::Preferences;
 use saucers::webview::Webview;
+use saucers::webview_events::DomReadyEvent;
+use saucers::webview_events::FaviconEvent;
 
 fn main() {
     // Create a collector to help freeing up resources.
@@ -23,15 +25,21 @@ fn main() {
 
     // Register a one-time listener for DOM ready event.
     // Prefer using the handle argument instead of capturing to prevent cycle references.
-    w.once_dom_ready(move |w| {
-        w.execute("window.saucer.internal.send_message(`Hello! Your user agent is '${navigator.userAgent}'!`);");
-    });
+    w.once(
+        DomReadyEvent,
+        Box::new(move |w| {
+            w.execute("window.saucer.internal.send_message(`Hello! Your user agent is '${navigator.userAgent}'!`);");
+        })
+    );
 
     // Registers a repeatable event handler for favicon event.
     let on_favicon_id = w
-        .on_favicon(|_, icon| {
-            println!("Wow, you have a favicon of {} bytes!", icon.data().size());
-        })
+        .on(
+            FaviconEvent,
+            Box::new(|_, icon| {
+                println!("Wow, you have a favicon of {} bytes!", icon.data().size());
+            })
+        )
         .unwrap();
 
     // Handles incoming webview messages.
@@ -52,7 +60,7 @@ fn main() {
     app.run();
 
     // An event handler can be cleared using its ID.
-    w.off_favicon(on_favicon_id);
+    w.off(FaviconEvent, on_favicon_id);
 
     // Rust will clean up everything in correct order. But to make it clear, we will drop it manually.
     drop(w);
