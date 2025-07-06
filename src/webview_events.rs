@@ -48,7 +48,7 @@ macro_rules! make_event {
                 unsafe { $clear(ptr, $chn) }
             }
 
-            fn event_id() -> u32 { $chn + $offset }
+            fn event_id() -> u32 { ($chn + $offset) as u32 }
         }
     };
 }
