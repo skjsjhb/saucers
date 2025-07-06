@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use saucers::app::App;
 use saucers::collector::Collector;
@@ -26,12 +26,12 @@ fn webview_test() {
 
     w.on_closed({
         let arc = arc.clone();
-        move || {
+        move |_| {
             let _ = &arc;
         }
     });
 
-    w.once_favicon(|icon| {
+    w.once_favicon(|_, icon| {
         assert!(
             icon.data().data().is_some_and(|it| it.len() > 0),
             "Icon should be retrieved"
@@ -50,7 +50,7 @@ fn webview_test() {
     // This will not be fired, so we can validate whether auto-dropping for once handlers works
     w.once_minimize({
         let arc = arc.clone();
-        move |_| {
+        move |_, _| {
             let _ = &arc;
         }
     });
@@ -61,9 +61,8 @@ fn webview_test() {
     id.store(
         w.on_dom_ready({
             let id = id.clone();
-            let w = w.clone();
             let arc = arc.clone();
-            move || {
+            move |w| {
                 let id = id.load(Ordering::Relaxed);
                 w.off_dom_ready(id);
                 let _ = &arc;
@@ -73,18 +72,17 @@ fn webview_test() {
         Ordering::Relaxed
     );
 
-    let id1 = w
-        .on_dom_ready({
-            let arc = arc.clone();
-            move || {
-                let _ = &arc;
-            }
-        })
-        .unwrap();
+    w.on_dom_ready({
+        let arc = arc.clone();
+        move |_| {
+            let _ = &arc;
+        }
+    })
+    .unwrap();
 
     w.on_title({
         let arc = arc.clone();
-        move |title: &str| {
+        move |_, title: &str| {
             let _ = &arc;
             tx.send(title.to_owned()).unwrap();
         }
@@ -94,18 +92,15 @@ fn webview_test() {
     w.once_closed({
         let app = app.clone();
         let arc = arc.clone();
-        move || {
+        move |_| {
             let _ = &arc;
             app.quit();
         }
     });
 
-    w.on_message({
-        let w = w.clone();
-        move |_: &str| -> bool {
-            w.close();
-            true
-        }
+    w.on_message(move |w, _| -> bool {
+        w.close();
+        true
     });
 
     app.run();
@@ -115,13 +110,9 @@ fn webview_test() {
         "Event handler should receive correct arguments"
     );
 
-    w.off_dom_ready(id1);
-    w.clear_title();
-    w.off_message();
-
     w.once_closed({
         let arc = arc.clone();
-        move || {
+        move |_| {
             let _ = &arc;
         }
     });

@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::marker::PhantomData;
-use std::ptr::NonNull;
 use std::ptr::null_mut;
+use std::ptr::NonNull;
 use std::rc::Rc;
+use std::sync::mpmc::Sender;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::Weak;
-use std::sync::mpmc::Sender;
 
 use crate::app::App;
 use crate::capi::*;
@@ -23,7 +23,7 @@ use crate::script::Script;
 
 pub(crate) struct WebviewPtr {
     ptr: NonNull<saucer_handle>,
-    message_handler: Option<*mut Rc<RefCell<Box<dyn FnMut(&str) -> bool>>>>,
+    message_handler: Option<*mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, &str) -> bool>>>)>,
     _owns: PhantomData<saucer_handle>,
     _counter: Arc<()>,
 
@@ -140,26 +140,30 @@ impl UnsafeWebview {
         }
     }
 
-    fn replace_message_handler(&mut self, fun: impl FnMut(&str) -> bool + 'static) {
+    fn replace_message_handler(&mut self, wk: WebviewRef, fun: impl FnMut(Webview, &str) -> bool + 'static) {
         if !self.app.is_thread_safe() {
             return;
         }
 
         self.remove_message_handler();
 
-        let bb = Box::new(fun) as Box<dyn FnMut(&str) -> bool>;
-        let ptr = Box::into_raw(Box::new(Rc::new(RefCell::new(bb))));
+        let bb = Box::new(fun) as Box<dyn FnMut(Webview, &str) -> bool>;
+        let rc = Rc::new(RefCell::new(bb));
+        let pair = (wk, rc);
+        let ptr = Box::into_raw(Box::new(pair));
         unsafe { saucer_webview_on_message_with_arg(self.as_ptr(), Some(on_message_trampoline), ptr as *mut c_void) }
         self.ptr.as_mut().unwrap().message_handler = Some(ptr);
     }
 }
 
 extern "C" fn on_message_trampoline(msg: *const c_char, raw: *mut c_void) -> bool {
-    let bb = unsafe { Box::from_raw(raw as *mut Rc<RefCell<Box<dyn FnMut(&str) -> bool>>>) };
-    let rc = (*bb).clone();
-    let mut fun = rc.borrow_mut();
+    let bb = unsafe { Box::from_raw(raw as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, &str) -> bool>>>)) };
+    let rc = (*bb).1.clone();
+    if let Some(w) = bb.0.upgrade() {
+        rc.borrow_mut()(w, &ctor!(msg));
+    }
     let _ = Box::into_raw(bb); // Avoid dropping the handler
-    (*fun)(&ctor!(msg))
+    true
 }
 
 #[derive(Clone)]
@@ -173,8 +177,8 @@ impl Webview {
     /// Only one handler can be set. Setting a new one replaces the previous one.
     ///
     /// This method must be called on the event thread, or it does nothing.
-    pub fn on_message(&self, fun: impl FnMut(&str) -> bool + 'static) {
-        self.0.write().unwrap().replace_message_handler(fun);
+    pub fn on_message(&self, fun: impl FnMut(Webview, &str) -> bool + 'static) {
+        self.0.write().unwrap().replace_message_handler(self.downgrade(), fun);
     }
 
     /// Removes the message handler, if any.
@@ -299,7 +303,17 @@ impl Webview {
     pub fn set_max_size(&self, w: i32, h: i32) { unsafe { saucer_window_set_max_size(self.as_ptr(), w, h) } }
     pub fn set_min_size(&self, w: i32, h: i32) { unsafe { saucer_window_set_min_size(self.as_ptr(), w, h) } }
 
+    pub fn app(&self) -> App { self.0.read().unwrap().app.clone() }
+
     pub(crate) fn as_ptr(&self) -> *mut saucer_handle { self.0.read().unwrap().as_ptr() }
 
     pub(crate) fn is_event_thread(&self) -> bool { self.0.read().unwrap().app.is_thread_safe() }
+
+    pub(crate) fn downgrade(&self) -> WebviewRef { WebviewRef(Arc::downgrade(&self.0)) }
+}
+
+pub(crate) struct WebviewRef(pub(crate) Weak<RwLock<UnsafeWebview>>);
+
+impl WebviewRef {
+    pub(crate) fn upgrade(&self) -> Option<Webview> { Some(Webview(self.0.upgrade()?)) }
 }

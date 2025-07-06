@@ -8,6 +8,7 @@ use crate::ctor;
 use crate::icon::Icon;
 use crate::navigation::WebviewNavigation;
 use crate::webview::Webview;
+use crate::webview::WebviewRef;
 
 #[derive(Eq, PartialEq)]
 pub enum WebviewLoadState {
@@ -30,7 +31,10 @@ macro_rules! handle_evt {
         }
 
         let bb = Box::new($fun) as Box<$rtp>;
-        let ptr = Box::into_raw(Box::new(Rc::new(RefCell::new(bb))));
+        let rc = Rc::new(RefCell::new(bb));
+        let wk = $sf.downgrade();
+        let pair = (wk, rc);
+        let ptr = Box::into_raw(Box::new(pair));
         let id = unsafe { $capi($sf.as_ptr(), $chn, $cfn as *mut c_void, ptr as *mut c_void) };
 
         let mut guard = $sf.0.write().unwrap();
@@ -99,7 +103,10 @@ macro_rules! handle_evt_once {
 
         let fn_ptr = $cfn as *mut c_void;
         let bb = Box::new($fun) as Box<$rtp>;
-        let ptr = Box::into_raw(Box::new(Rc::new(RefCell::new(Some(bb)))));
+        let rc = Rc::new(RefCell::new(Some(bb)));
+        let wk = $sf.downgrade();
+        let pair = (wk, rc);
+        let ptr = Box::into_raw(Box::new(pair));
 
         unsafe {
             $capi($sf.as_ptr(), $chn, fn_ptr, ptr as *mut c_void);
@@ -110,7 +117,7 @@ macro_rules! handle_evt_once {
         // Returns true if the dropper can be removed
         let checker = Box::new(move || {
             let bb = unsafe { Box::from_raw(ptr) };
-            let rt = if let Ok(opt) = bb.try_borrow() {
+            let rt = if let Ok(opt) = bb.1.try_borrow() {
                 opt.is_none() // The once handler has been executed
             } else {
                 false
@@ -142,262 +149,262 @@ macro_rules! handle_evt_once {
 }
 
 impl Webview {
-    pub fn once_dom_ready(&self, fun: impl FnOnce() + 'static) {
+    pub fn once_dom_ready(&self, fun: impl FnOnce(Webview) + 'static) {
         handle_evt_once!(
             webview,
             self,
             once_dom_ready_trampoline,
-            fun -> dyn FnOnce() + 'static,
+            fun -> dyn FnOnce(Webview) + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY
         )
     }
 
-    pub fn once_navigate(&self, fun: impl FnOnce(WebviewNavigation) -> bool + 'static) {
+    pub fn once_navigate(&self, fun: impl FnOnce(Webview, WebviewNavigation) -> bool + 'static) {
         handle_evt_once!(
             webview,
             self,
             once_navigate_trampoline,
-            fun -> dyn FnOnce(WebviewNavigation) -> bool + 'static,
+            fun -> dyn FnOnce(Webview, WebviewNavigation) -> bool + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE
         )
     }
 
-    pub fn once_navigated(&self, fun: impl FnOnce(&str) + 'static) {
+    pub fn once_navigated(&self, fun: impl FnOnce(Webview, &str) + 'static) {
         handle_evt_once!(
             webview,
             self,
             once_navigated_trampoline,
-            fun -> dyn FnOnce(&str) + 'static,
+            fun -> dyn FnOnce(Webview, &str) + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED
         )
     }
 
-    pub fn once_title(&self, fun: impl FnOnce(&str) + 'static) {
+    pub fn once_title(&self, fun: impl FnOnce(Webview, &str) + 'static) {
         handle_evt_once!(
             webview,
             self,
             once_title_trampoline,
-            fun -> dyn FnOnce(&str) + 'static,
+            fun -> dyn FnOnce(Webview, &str) + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE
         )
     }
 
-    pub fn once_favicon(&self, fun: impl FnOnce(Icon) + 'static) {
+    pub fn once_favicon(&self, fun: impl FnOnce(Webview, Icon) + 'static) {
         handle_evt_once!(
             webview,
             self,
             once_favicon_trampoline,
-            fun -> dyn FnOnce(Icon) + 'static,
+            fun -> dyn FnOnce(Webview, Icon) + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON
         )
     }
 
-    pub fn once_load(&self, fun: impl FnOnce(WebviewLoadState) + 'static) {
+    pub fn once_load(&self, fun: impl FnOnce(Webview, WebviewLoadState) + 'static) {
         handle_evt_once!(
             webview,
             self,
             once_load_trampoline,
-            fun -> dyn FnOnce(WebviewLoadState) + 'static,
+            fun -> dyn FnOnce(Webview, WebviewLoadState) + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD
         )
     }
 
-    pub fn once_decorated(&self, fun: impl FnOnce(bool) + 'static) {
+    pub fn once_decorated(&self, fun: impl FnOnce(Webview, bool) + 'static) {
         handle_evt_once!(
             webview,
             self,
             once_decorated_trampoline,
-            fun -> dyn FnOnce(bool) + 'static,
+            fun -> dyn FnOnce(Webview, bool) + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED
         )
     }
 
-    pub fn once_maximize(&self, fun: impl FnOnce(bool) + 'static) {
+    pub fn once_maximize(&self, fun: impl FnOnce(Webview, bool) + 'static) {
         handle_evt_once!(
             window,
             self,
             once_maximize_trampoline,
-            fun -> dyn FnOnce(bool) + 'static,
+            fun -> dyn FnOnce(Webview, bool) + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE
         )
     }
 
-    pub fn once_minimize(&self, fun: impl FnOnce(bool) + 'static) {
+    pub fn once_minimize(&self, fun: impl FnOnce(Webview, bool) + 'static) {
         handle_evt_once!(
             window,
             self,
             once_minimize_trampoline,
-            fun -> dyn FnOnce(bool) + 'static,
+            fun -> dyn FnOnce(Webview, bool) + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE
         )
     }
 
-    pub fn once_closed(&self, fun: impl FnOnce() + 'static) {
+    pub fn once_closed(&self, fun: impl FnOnce(Webview) + 'static) {
         handle_evt_once!(
             window,
             self,
             once_closed_trampoline,
-            fun -> dyn FnOnce() + 'static,
+            fun -> dyn FnOnce(Webview) + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED
         )
     }
 
-    pub fn once_resize(&self, fun: impl FnOnce(i32, i32) + 'static) {
+    pub fn once_resize(&self, fun: impl FnOnce(Webview, i32, i32) + 'static) {
         handle_evt_once!(
             window,
             self,
             once_resize_trampoline,
-            fun -> dyn FnOnce(i32, i32) + 'static,
+            fun -> dyn FnOnce(Webview, i32, i32) + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE
         )
     }
 
-    pub fn once_focus(&self, fun: impl FnOnce(bool) + 'static) {
+    pub fn once_focus(&self, fun: impl FnOnce(Webview, bool) + 'static) {
         handle_evt_once!(
             window,
             self,
             once_focus_trampoline,
-            fun -> dyn FnOnce(bool) + 'static,
+            fun -> dyn FnOnce(Webview, bool) + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS
         )
     }
 
-    pub fn once_close(&self, fun: impl FnOnce() -> bool + 'static) {
+    pub fn once_close(&self, fun: impl FnOnce(Webview) -> bool + 'static) {
         handle_evt_once!(
             window,
             self,
             once_close_trampoline,
-            fun -> dyn FnOnce() -> bool + 'static,
+            fun -> dyn FnOnce(Webview) -> bool + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE
         )
     }
 
-    pub fn on_dom_ready(&self, fun: impl FnMut() + 'static) -> Option<u64> {
+    pub fn on_dom_ready(&self, fun: impl FnMut(Webview) + 'static) -> Option<u64> {
         handle_evt!(
             webview,
             self,
             on_dom_ready_trampoline,
-            fun -> dyn FnMut() + 'static,
+            fun -> dyn FnMut(Webview) + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY
         )
     }
 
-    pub fn on_navigate(&self, fun: impl FnMut(WebviewNavigation) -> bool + 'static) -> Option<u64> {
+    pub fn on_navigate(&self, fun: impl FnMut(Webview, WebviewNavigation) -> bool + 'static) -> Option<u64> {
         handle_evt!(
             webview,
             self,
             on_navigate_trampoline,
-            fun -> dyn FnMut(WebviewNavigation) -> bool + 'static,
+            fun -> dyn FnMut(Webview, WebviewNavigation) -> bool + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE
         )
     }
 
-    pub fn on_navigated(&self, fun: impl FnMut(&str) + 'static) -> Option<u64> {
+    pub fn on_navigated(&self, fun: impl FnMut(Webview, &str) + 'static) -> Option<u64> {
         handle_evt!(
             webview,
             self,
             on_navigated_trampoline,
-            fun -> dyn FnMut(&str) + 'static,
+            fun -> dyn FnMut(Webview, &str) + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED
         )
     }
 
-    pub fn on_title(&self, fun: impl FnMut(&str) + 'static) -> Option<u64> {
+    pub fn on_title(&self, fun: impl FnMut(Webview, &str) + 'static) -> Option<u64> {
         handle_evt!(
             webview,
             self,
             on_title_trampoline,
-            fun -> dyn FnMut(&str) + 'static,
+            fun -> dyn FnMut(Webview, &str) + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE
         )
     }
 
-    pub fn on_favicon(&self, fun: impl FnMut(Icon) + 'static) -> Option<u64> {
+    pub fn on_favicon(&self, fun: impl FnMut(Webview, Icon) + 'static) -> Option<u64> {
         handle_evt!(
             webview,
             self,
             on_favicon_trampoline,
-            fun -> dyn FnMut(Icon) + 'static,
+            fun -> dyn FnMut(Webview, Icon) + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON
         )
     }
 
-    pub fn on_load(&self, fun: impl FnMut(WebviewLoadState) + 'static) -> Option<u64> {
+    pub fn on_load(&self, fun: impl FnMut(Webview, WebviewLoadState) + 'static) -> Option<u64> {
         handle_evt!(
             webview,
             self,
             on_load_trampoline,
-            fun -> dyn FnMut(WebviewLoadState) + 'static,
+            fun -> dyn FnMut(Webview, WebviewLoadState) + 'static,
             SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD
         )
     }
 
-    pub fn on_decorated(&self, fun: impl FnMut(bool) + 'static) -> Option<u64> {
+    pub fn on_decorated(&self, fun: impl FnMut(Webview, bool) + 'static) -> Option<u64> {
         handle_evt!(
             window,
             self,
             on_decorated_trampoline,
-            fun -> dyn FnMut(bool) + 'static,
+            fun -> dyn FnMut(Webview, bool) + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED
         )
     }
 
-    pub fn on_maximize(&self, fun: impl FnMut(bool) + 'static) -> Option<u64> {
+    pub fn on_maximize(&self, fun: impl FnMut(Webview, bool) + 'static) -> Option<u64> {
         handle_evt!(
             window,
             self,
             on_maximize_trampoline,
-            fun -> dyn FnMut(bool) + 'static,
+            fun -> dyn FnMut(Webview, bool) + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE
         )
     }
 
-    pub fn on_minimize(&self, fun: impl FnMut(bool) + 'static) -> Option<u64> {
+    pub fn on_minimize(&self, fun: impl FnMut(Webview, bool) + 'static) -> Option<u64> {
         handle_evt!(
             window,
             self,
             on_minimize_trampoline,
-            fun -> dyn FnMut(bool) + 'static,
+            fun -> dyn FnMut(Webview, bool) + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE
         )
     }
 
-    pub fn on_closed(&self, fun: impl FnMut() + 'static) -> Option<u64> {
+    pub fn on_closed(&self, fun: impl FnMut(Webview) + 'static) -> Option<u64> {
         handle_evt!(
             window,
             self,
             on_closed_trampoline,
-            fun -> dyn FnMut() + 'static,
+            fun -> dyn FnMut(Webview) + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED
         )
     }
 
-    pub fn on_resize(&self, fun: impl FnMut(i32, i32) + 'static) -> Option<u64> {
+    pub fn on_resize(&self, fun: impl FnMut(Webview, i32, i32) + 'static) -> Option<u64> {
         handle_evt!(
             window,
             self,
             on_resize_trampoline ,
-            fun -> dyn FnMut(i32, i32) + 'static,
+            fun -> dyn FnMut(Webview, i32, i32) + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE
         )
     }
 
-    pub fn on_focus(&self, fun: impl FnMut(bool) + 'static) -> Option<u64> {
+    pub fn on_focus(&self, fun: impl FnMut(Webview, bool) + 'static) -> Option<u64> {
         handle_evt!(
             window,
             self,
             on_focus_trampoline ,
-            fun -> dyn FnMut(bool) + 'static,
+            fun -> dyn FnMut(Webview, bool) + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS
         )
     }
 
-    pub fn on_close(&self, fun: impl FnMut() -> bool + 'static) -> Option<u64> {
+    pub fn on_close(&self, fun: impl FnMut(Webview) -> bool + 'static) -> Option<u64> {
         handle_evt!(
             window,
             self,
             on_close_trampoline,
-            fun -> dyn FnMut() -> bool + 'static,
+            fun -> dyn FnMut(Webview) -> bool + 'static,
             SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE
         )
     }
@@ -488,30 +495,53 @@ impl Webview {
 }
 
 extern "C" fn once_dom_ready_trampoline(_: *mut saucer_handle, arg: *mut c_void) {
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Option<Box<dyn FnOnce()>>>>) };
-    if let Some(fun) = bb.borrow_mut().take() {
-        fun();
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Option<Box<dyn FnOnce(Webview)>>>>)) };
+    if let Some(fun) = bb.1.borrow_mut().take() {
+        if let Some(w) = bb.0.upgrade() {
+            fun(w);
+        }
     }
     let _ = Box::into_raw(bb);
 }
 
-extern "C" fn once_navigate_trampoline(_: *mut saucer_handle, arg: *mut c_void, nav: *mut saucer_navigation) -> bool {
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Option<Box<dyn FnOnce(WebviewNavigation) -> bool>>>>) };
-    let rt = if let Some(fun) = bb.borrow_mut().take() {
-        let nav = WebviewNavigation::from_ptr(nav);
-        fun(nav)
+extern "C" fn once_navigate_trampoline(
+    _: *mut saucer_handle,
+    arg: *mut c_void,
+    nav: *mut saucer_navigation
+) -> SAUCER_POLICY {
+    let bb = unsafe {
+        Box::from_raw(
+            arg as *mut (
+                WebviewRef,
+                Rc<RefCell<Option<Box<dyn FnOnce(Webview, WebviewNavigation) -> bool>>>>
+            )
+        )
+    };
+    let rt = if let Some(fun) = bb.1.borrow_mut().take() {
+        if let Some(w) = bb.0.upgrade() {
+            let nav = WebviewNavigation::from_ptr(nav);
+            fun(w, nav)
+        } else {
+            false
+        }
     } else {
         false
     };
     let _ = Box::into_raw(bb);
-    rt
+    if rt {
+        SAUCER_POLICY_SAUCER_POLICY_ALLOW
+    } else {
+        SAUCER_POLICY_SAUCER_POLICY_BLOCK
+    }
 }
 
 extern "C" fn once_navigated_trampoline(_: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
     let url = ctor!(url);
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Option<Box<dyn FnOnce(&str)>>>>) };
-    if let Some(fun) = bb.borrow_mut().take() {
-        fun(&url);
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Option<Box<dyn FnOnce(Webview, &str)>>>>)) };
+    if let Some(fun) = bb.1.borrow_mut().take() {
+        if let Some(w) = bb.0.upgrade() {
+            fun(w, &url);
+        }
     }
     let _ = Box::into_raw(bb);
 }
@@ -522,15 +552,24 @@ extern "C" fn once_title_trampoline(h: *mut saucer_handle, arg: *mut c_void, url
 
 extern "C" fn once_favicon_trampoline(_: *mut saucer_handle, arg: *mut c_void, icon: *mut saucer_icon) {
     let icon = Icon::from_ptr(icon);
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Option<Box<dyn FnOnce(Icon)>>>>) };
-    if let Some(fun) = bb.borrow_mut().take() {
-        fun(icon);
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Option<Box<dyn FnOnce(Webview, Icon)>>>>)) };
+    if let Some(fun) = bb.1.borrow_mut().take() {
+        if let Some(w) = bb.0.upgrade() {
+            fun(w, icon);
+        }
     }
     let _ = Box::into_raw(bb);
 }
 
 extern "C" fn once_load_trampoline(_: *mut saucer_handle, arg: *mut c_void, state: SAUCER_STATE) {
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Option<Box<dyn FnOnce(WebviewLoadState)>>>>) };
+    let bb = unsafe {
+        Box::from_raw(
+            arg as *mut (
+                WebviewRef,
+                Rc<RefCell<Option<Box<dyn FnOnce(Webview, WebviewLoadState)>>>>
+            )
+        )
+    };
 
     let state = if state == SAUCER_STATE_SAUCER_STATE_STARTED {
         WebviewLoadState::Started
@@ -538,17 +577,21 @@ extern "C" fn once_load_trampoline(_: *mut saucer_handle, arg: *mut c_void, stat
         WebviewLoadState::Finished
     };
 
-    if let Some(fun) = bb.borrow_mut().take() {
-        fun(state);
+    if let Some(fun) = bb.1.borrow_mut().take() {
+        if let Some(w) = bb.0.upgrade() {
+            fun(w, state);
+        }
     }
 
     let _ = Box::into_raw(bb);
 }
 
 extern "C" fn once_decorated_trampoline(_: *mut saucer_handle, arg: *mut c_void, b: bool) {
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Option<Box<dyn FnOnce(bool)>>>>) };
-    if let Some(fun) = bb.borrow_mut().take() {
-        fun(b);
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Option<Box<dyn FnOnce(Webview, bool)>>>>)) };
+    if let Some(fun) = bb.1.borrow_mut().take() {
+        if let Some(w) = bb.0.upgrade() {
+            fun(w, b);
+        }
     }
     let _ = Box::into_raw(bb);
 }
@@ -564,9 +607,12 @@ extern "C" fn once_minimize_trampoline(h: *mut saucer_handle, arg: *mut c_void, 
 extern "C" fn once_closed_trampoline(h: *mut saucer_handle, arg: *mut c_void) { once_dom_ready_trampoline(h, arg); }
 
 extern "C" fn once_resize_trampoline(_: *mut saucer_handle, arg: *mut c_void, w: i32, h: i32) {
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Option<Box<dyn FnOnce(i32, i32)>>>>) };
-    if let Some(fun) = bb.borrow_mut().take() {
-        fun(w, h);
+    let bb =
+        unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Option<Box<dyn FnOnce(Webview, i32, i32)>>>>)) };
+    if let Some(fun) = bb.1.borrow_mut().take() {
+        if let Some(wv) = bb.0.upgrade() {
+            fun(wv, w, h);
+        }
     }
     let _ = Box::into_raw(bb);
 }
@@ -576,12 +622,16 @@ extern "C" fn once_focus_trampoline(h: *mut saucer_handle, arg: *mut c_void, b: 
 }
 
 extern "C" fn once_close_trampoline(_: *mut saucer_handle, arg: *mut c_void) -> SAUCER_POLICY {
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Option<Box<dyn FnOnce() -> bool>>>>) };
-    let rt = if let Some(fun) = bb.borrow_mut().take() {
-        if fun() {
-            SAUCER_POLICY_SAUCER_POLICY_ALLOW
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Option<Box<dyn FnOnce(Webview) -> bool>>>>)) };
+    let rt = if let Some(fun) = bb.1.borrow_mut().take() {
+        if let Some(w) = bb.0.upgrade() {
+            if fun(w) {
+                SAUCER_POLICY_SAUCER_POLICY_ALLOW
+            } else {
+                SAUCER_POLICY_SAUCER_POLICY_BLOCK
+            }
         } else {
-            SAUCER_POLICY_SAUCER_POLICY_BLOCK
+            SAUCER_POLICY_SAUCER_POLICY_ALLOW
         }
     } else {
         SAUCER_POLICY_SAUCER_POLICY_ALLOW
@@ -591,26 +641,50 @@ extern "C" fn once_close_trampoline(_: *mut saucer_handle, arg: *mut c_void) -> 
 }
 
 extern "C" fn on_dom_ready_trampoline(_: *mut saucer_handle, arg: *mut c_void) {
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut()>>>) };
-    let rc = (*bb).clone();
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview)>>>)) };
+    let rc = (*bb).1.clone();
+    if let Some(w) = bb.0.upgrade() {
+        rc.borrow_mut()(w);
+    }
     let _ = Box::into_raw(bb);
-    rc.borrow_mut()();
 }
 
-extern "C" fn on_navigate_trampoline(_: *mut saucer_handle, arg: *mut c_void, nav: *mut saucer_navigation) -> bool {
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(WebviewNavigation) -> bool>>>) };
-    let rc = (*bb).clone();
-    let _ = Box::into_raw(bb);
+extern "C" fn on_navigate_trampoline(
+    _: *mut saucer_handle,
+    arg: *mut c_void,
+    nav: *mut saucer_navigation
+) -> SAUCER_POLICY {
+    let bb = unsafe {
+        Box::from_raw(
+            arg as *mut (
+                WebviewRef,
+                Rc<RefCell<Box<dyn FnMut(Webview, WebviewNavigation) -> bool>>>
+            )
+        )
+    };
+    let rc = (*bb).1.clone();
     let nav = WebviewNavigation::from_ptr(nav);
-    rc.borrow_mut()(nav)
+    let rt = if let Some(w) = bb.0.upgrade() {
+        rc.borrow_mut()(w, nav)
+    } else {
+        true
+    };
+    let _ = Box::into_raw(bb);
+    if rt {
+        SAUCER_POLICY_SAUCER_POLICY_ALLOW
+    } else {
+        SAUCER_POLICY_SAUCER_POLICY_BLOCK
+    }
 }
 
 extern "C" fn on_navigated_trampoline(_: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
     let url = ctor!(url);
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(&str)>>>) };
-    let rc = (*bb).clone();
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, &str)>>>)) };
+    let rc = (*bb).1.clone();
+    if let Some(w) = bb.0.upgrade() {
+        rc.borrow_mut()(w, &url);
+    }
     let _ = Box::into_raw(bb);
-    rc.borrow_mut()(&url);
 }
 
 extern "C" fn on_title_trampoline(h: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
@@ -619,16 +693,17 @@ extern "C" fn on_title_trampoline(h: *mut saucer_handle, arg: *mut c_void, url: 
 
 extern "C" fn on_favicon_trampoline(_: *mut saucer_handle, arg: *mut c_void, icon: *mut saucer_icon) {
     let icon = Icon::from_ptr(icon);
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(Icon)>>>) };
-    let rc = (*bb).clone();
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, Icon)>>>)) };
+    let rc = (*bb).1.clone();
+    if let Some(w) = bb.0.upgrade() {
+        rc.borrow_mut()(w, icon);
+    }
     let _ = Box::into_raw(bb);
-    rc.borrow_mut()(icon);
 }
 
 extern "C" fn on_load_trampoline(_: *mut saucer_handle, arg: *mut c_void, state: SAUCER_STATE) {
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(WebviewLoadState)>>>) };
-    let rc = (*bb).clone();
-    let _ = Box::into_raw(bb);
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, WebviewLoadState)>>>)) };
+    let rc = (*bb).1.clone();
 
     let state = if state == SAUCER_STATE_SAUCER_STATE_STARTED {
         WebviewLoadState::Started
@@ -636,14 +711,20 @@ extern "C" fn on_load_trampoline(_: *mut saucer_handle, arg: *mut c_void, state:
         WebviewLoadState::Finished
     };
 
-    rc.borrow_mut()(state);
+    if let Some(w) = bb.0.upgrade() {
+        rc.borrow_mut()(w, state);
+    }
+
+    let _ = Box::into_raw(bb);
 }
 
 extern "C" fn on_decorated_trampoline(_: *mut saucer_handle, arg: *mut c_void, b: bool) {
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(bool)>>>) };
-    let rc = (*bb).clone();
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, bool)>>>)) };
+    let rc = (*bb).1.clone();
+    if let Some(w) = bb.0.upgrade() {
+        rc.borrow_mut()(w, b);
+    }
     let _ = Box::into_raw(bb);
-    rc.borrow_mut()(b);
 }
 
 extern "C" fn on_maximize_trampoline(h: *mut saucer_handle, arg: *mut c_void, b: bool) {
@@ -657,10 +738,12 @@ extern "C" fn on_minimize_trampoline(h: *mut saucer_handle, arg: *mut c_void, b:
 extern "C" fn on_closed_trampoline(h: *mut saucer_handle, arg: *mut c_void) { on_dom_ready_trampoline(h, arg); }
 
 extern "C" fn on_resize_trampoline(_: *mut saucer_handle, arg: *mut c_void, w: i32, h: i32) {
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut(i32, i32)>>>) };
-    let rc = (*bb).clone();
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, i32, i32)>>>)) };
+    let rc = (*bb).1.clone();
+    if let Some(wv) = bb.0.upgrade() {
+        rc.borrow_mut()(wv, w, h);
+    }
     let _ = Box::into_raw(bb);
-    rc.borrow_mut()(w, h);
 }
 
 extern "C" fn on_focus_trampoline(h: *mut saucer_handle, arg: *mut c_void, b: bool) {
@@ -668,12 +751,16 @@ extern "C" fn on_focus_trampoline(h: *mut saucer_handle, arg: *mut c_void, b: bo
 }
 
 extern "C" fn on_close_trampoline(_: *mut saucer_handle, arg: *mut c_void) -> SAUCER_POLICY {
-    let bb = unsafe { Box::from_raw(arg as *mut Rc<RefCell<Box<dyn FnMut() -> bool>>>) };
-    let rc = (*bb).clone();
-    let _ = Box::into_raw(bb);
-    let rr = rc.borrow_mut()();
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview) -> bool>>>)) };
+    let rc = (*bb).1.clone();
+    let rt = if let Some(w) = bb.0.upgrade() {
+        rc.borrow_mut()(w)
+    } else {
+        true
+    };
 
-    if rr {
+    let _ = Box::into_raw(bb);
+    if rt {
         SAUCER_POLICY_SAUCER_POLICY_ALLOW
     } else {
         SAUCER_POLICY_SAUCER_POLICY_BLOCK

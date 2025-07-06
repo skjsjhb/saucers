@@ -49,21 +49,21 @@ fn main() {
     drop(prefs);
 
     // Register a one-time listener for DOM ready event.
-    w.once_dom_ready({
-        let w = w.clone();
-        move || w.execute("window.saucer.internal.send_message(`Hello! Your user agent is '${navigator.userAgent}'!`);")
+    // Prefer using the handle argument instead of capturing to prevent cycle references.
+    w.once_dom_ready(move |w| {
+        w.execute("window.saucer.internal.send_message(`Hello! Your user agent is '${navigator.userAgent}'!`);");
     });
 
     // Registers a repeatable event handler for favicon event.
     let on_favicon_id = w
-        .on_favicon(|icon| {
+        .on_favicon(|_, icon| {
             println!("Wow, you have a favicon of {} bytes!", icon.data().size());
         })
         .unwrap();
 
     // Handles incoming webview messages.
     // This API forwards the message as-is, allowing more complex channels to be built on it.
-    w.on_message(|msg| {
+    w.on_message(|_, msg| {
         println!("Browser: {msg}");
         true
     });
@@ -97,6 +97,7 @@ fn main() {
 - Capturing webview handles inside event handlers can easily lead to cycle references and trigger an assertion from the
   collector.
 - Safety (mostly the `Send` trait) of certain APIs are not fully verified.
+- A nightly Rust compiler is required.
 
 ## License
 
