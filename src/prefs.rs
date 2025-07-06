@@ -5,16 +5,16 @@ use std::ptr::NonNull;
 use crate::app::App;
 use crate::capi::*;
 
-pub struct Preferences {
+pub struct Preferences<'a> {
     inner: NonNull<saucer_preferences>,
-    app: App, // Keeps the app pointer alive during its lifetime
+    app: &'a App,
     _owns: PhantomData<saucer_preferences>
 }
 
-unsafe impl Send for Preferences {}
-unsafe impl Sync for Preferences {}
+unsafe impl Send for Preferences<'_> {}
+unsafe impl Sync for Preferences<'_> {}
 
-impl Drop for Preferences {
+impl Drop for Preferences<'_> {
     fn drop(&mut self) {
         unsafe {
             saucer_preferences_free(self.inner.as_ptr());
@@ -22,9 +22,9 @@ impl Drop for Preferences {
     }
 }
 
-impl Preferences {
+impl<'a> Preferences<'a> {
     /// Creates a new preferences set for the specified app.
-    pub fn new(app: &App) -> Self {
+    pub fn new(app: &'a App) -> Self {
         let p = unsafe {
             // SAFETY: The preferences is later passed to a webview window which (we believe) will use the pointer
             // safely, due to the fact that multiple webviews can be created from one app (in the C++ API).
@@ -33,7 +33,7 @@ impl Preferences {
 
         Self {
             inner: NonNull::new(p).expect("Failed to create preferences"),
-            app: app.clone(),
+            app,
             _owns: PhantomData
         }
     }

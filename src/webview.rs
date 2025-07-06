@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::marker::PhantomData;
-use std::ptr::null_mut;
 use std::ptr::NonNull;
+use std::ptr::null_mut;
 use std::rc::Rc;
-use std::sync::mpmc::Sender;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::Weak;
+use std::sync::mpmc::Sender;
 
 use crate::app::App;
 use crate::capi::*;
@@ -21,9 +21,8 @@ use crate::prefs::Preferences;
 use crate::rtoc;
 use crate::script::Script;
 
-#[derive(Default)]
 pub(crate) struct WebviewPtr {
-    ptr: Option<NonNull<saucer_handle>>,
+    ptr: NonNull<saucer_handle>,
     message_handler: Option<*mut Rc<RefCell<Box<dyn FnMut(&str) -> bool>>>>,
     _owns: PhantomData<saucer_handle>,
     _counter: Arc<()>,
@@ -39,13 +38,13 @@ unsafe impl Send for WebviewPtr {}
 unsafe impl Sync for WebviewPtr {}
 
 impl WebviewPtr {
-    fn as_ptr(&self) -> *mut saucer_handle { self.ptr.unwrap().as_ptr() }
+    fn as_ptr(&self) -> *mut saucer_handle { self.ptr.as_ptr() }
 }
 
 impl Collect for WebviewPtr {
     fn collect(self: Box<Self>) {
         unsafe {
-            saucer_free(self.ptr.unwrap().as_ptr());
+            saucer_free(self.ptr.as_ptr());
 
             if let Some(ptr) = self.message_handler {
                 drop(Box::from_raw(ptr));
@@ -109,12 +108,16 @@ impl UnsafeWebview {
         let ptr = unsafe { saucer_new(pref.as_ptr()) };
         let ptr = NonNull::new(ptr).expect("Failed to create webview");
 
-        let mut wpt = WebviewPtr::default();
-        wpt.ptr = Some(ptr);
-        wpt._counter = collector.count();
-
         Some(Self {
-            ptr: Some(wpt),
+            ptr: Some(WebviewPtr {
+                ptr,
+                message_handler: None,
+                _owns: PhantomData,
+                _counter: collector.count(),
+                web_event_droppers: HashMap::new(),
+                window_event_droppers: HashMap::new(),
+                once_event_droppers: Vec::new()
+            }),
             collector: Some(Arc::downgrade(&collector)),
             collector_tx: collector.get_sender(),
             app
@@ -300,5 +303,3 @@ impl Webview {
 
     pub(crate) fn is_event_thread(&self) -> bool { self.0.read().unwrap().app.is_thread_safe() }
 }
-
-// --- Event Handling ---

@@ -1,7 +1,7 @@
 use std::ffi::CString;
 use std::marker::PhantomData;
-use std::ptr::null_mut;
 use std::ptr::NonNull;
+use std::ptr::null_mut;
 
 use crate::capi::*;
 use crate::stash::Stash;
