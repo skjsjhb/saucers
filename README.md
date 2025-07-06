@@ -8,7 +8,7 @@
 
 ---
 
-# Why?
+## Why?
 
 [Saucer](https://github.com/saucer/saucer) is a cool webview library.
 
@@ -16,7 +16,7 @@
 
 And by putting them together you can build cooler hybrid apps.
 
-# Example
+## Example
 
 > [!WARNING]
 >
@@ -88,7 +88,7 @@ fn main() {
 }
 ```
 
-# Known Limitations
+## Known Limitations
 
 - This project is built on top of the [C-Bindings for saucer](https://github.com/saucer/bindings), which exports only a
   subset (major parts, but not all) of the C++ API. We currently have no plan to integrate with the C++ API.
@@ -98,7 +98,7 @@ fn main() {
   collector.
 - Safety (mostly the `Send` trait) of certain APIs are not fully verified.
 
-# License
+## License
 
 This project is released under the [MIT License](https://mit-license.org) to make licensing consistent with saucer
 itself. 
