@@ -14,10 +14,10 @@ pub trait WebviewEvent {
     type Handler: ?Sized + 'static;
     type OnceHandler: ?Sized + 'static;
 
-    fn register(ptr: *mut saucer_handle, raw: *mut c_void) -> u64;
-    fn register_once(ptr: *mut saucer_handle, raw: *mut c_void);
-    fn unregister(ptr: *mut saucer_handle, id: u64);
-    fn clear(ptr: *mut saucer_handle);
+    unsafe fn register(ptr: *mut saucer_handle, raw: *mut c_void) -> u64;
+    unsafe fn register_once(ptr: *mut saucer_handle, raw: *mut c_void);
+    unsafe fn unregister(ptr: *mut saucer_handle, id: u64);
+    unsafe fn clear(ptr: *mut saucer_handle);
     fn event_id() -> u32;
 }
 
@@ -28,23 +28,23 @@ macro_rules! make_event {
             type Handler = dyn FnMut(Webview $(,$arg)*) + 'static;
             type OnceHandler = dyn FnOnce(Webview $(,$arg)*) + 'static;
 
-            fn register(ptr: *mut saucer_handle, raw: *mut c_void) -> u64 {
+            unsafe fn register(ptr: *mut saucer_handle, raw: *mut c_void) -> u64 {
                 unsafe {
                     $reg(ptr, $chn, $tra as *mut c_void, raw)
                 }
             }
 
-            fn register_once(ptr: *mut saucer_handle, raw: *mut c_void) {
+            unsafe fn register_once(ptr: *mut saucer_handle, raw: *mut c_void) {
                 unsafe {
                     $reo(ptr, $chn, $tro as *mut c_void, raw)
                 }
             }
 
-            fn unregister(ptr: *mut saucer_handle, id: u64) {
+            unsafe fn unregister(ptr: *mut saucer_handle, id: u64) {
                 unsafe { $rem(ptr, $chn, id) }
             }
 
-            fn clear(ptr: *mut saucer_handle) {
+            unsafe fn clear(ptr: *mut saucer_handle) {
                 unsafe { $clear(ptr, $chn) }
             }
 
@@ -136,7 +136,7 @@ impl Webview {
         let wk = self.downgrade();
         let pair = (wk, rc);
         let ptr = Box::into_raw(Box::new(pair));
-        let id = T::register(self.as_ptr(), ptr as *mut c_void);
+        let id = unsafe { T::register(self.as_ptr(), ptr as *mut c_void) };
 
         let mut guard = self.0.write().unwrap();
         let key = (T::event_id(), id);
@@ -167,7 +167,7 @@ impl Webview {
         let pair = (wk, rc);
         let ptr = Box::into_raw(Box::new(pair));
 
-        T::register_once(self.as_ptr(), ptr as *mut c_void);
+        unsafe { T::register_once(self.as_ptr(), ptr as *mut c_void) }
 
         let mut guard = self.0.write().unwrap();
 
@@ -209,7 +209,7 @@ impl Webview {
             return;
         }
 
-        T::unregister(self.as_ptr(), id);
+        unsafe { T::unregister(self.as_ptr(), id) }
 
         let mut guard = self.0.write().unwrap();
         let key = (T::event_id(), id);
@@ -224,7 +224,7 @@ impl Webview {
             return;
         }
 
-        T::clear(self.as_ptr());
+        unsafe { T::clear(self.as_ptr()) }
 
         let mut guard = self.0.write().unwrap();
         for (_, dropper) in guard.ptr.as_mut().unwrap().dyn_event_droppers.drain() {

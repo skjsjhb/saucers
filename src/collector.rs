@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
-use std::sync::Arc;
 use std::sync::mpmc::Receiver;
 use std::sync::mpmc::Sender;
+use std::sync::Arc;
 
 /// The sharable struct backing [`Collector`] with private access.
 ///
@@ -60,4 +60,8 @@ impl Collector {
     pub(crate) fn get_inner(&self) -> Arc<UnsafeCollector> { self.0.clone() }
 
     pub fn new() -> Self { Self(Arc::new(UnsafeCollector::new()), PhantomData) }
+}
+
+impl Default for Collector {
+    fn default() -> Self { Self::new() }
 }

@@ -24,7 +24,7 @@ fn main() {
             "x86" => "x86",
             "x86_64" => "x64",
             "aarch64" => "arm64",
-            it => panic!("Unsupported architecture: {}", it)
+            it => panic!("Unsupported architecture: {it}")
         };
         println!(
             "cargo:rustc-link-search=native={}/build/_deps/saucer-build/nuget/Microsoft.Web.WebView2/build/native/{arch}",

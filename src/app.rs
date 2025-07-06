@@ -1,10 +1,10 @@
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
+use std::sync::mpmc::Sender;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::Weak;
-use std::sync::mpmc::Sender;
 use std::thread::ThreadId;
 
 use crate::capi::*;
@@ -13,8 +13,13 @@ use crate::collector::Collector;
 use crate::collector::UnsafeCollector;
 use crate::options::AppOptions;
 
+struct ReplaceableAppPtr(RwLock<Option<NonNull<saucer_application>>>);
+
+unsafe impl Send for ReplaceableAppPtr {}
+unsafe impl Sync for ReplaceableAppPtr {}
+
 struct AppPtr {
-    ptr: Arc<RwLock<Option<NonNull<saucer_application>>>>,
+    ptr: Arc<ReplaceableAppPtr>,
     _owns: PhantomData<saucer_application>,
     _counter: Arc<()>
 }
@@ -23,13 +28,13 @@ unsafe impl Send for AppPtr {}
 unsafe impl Sync for AppPtr {}
 
 impl AppPtr {
-    fn as_ptr(&self) -> *mut saucer_application { self.ptr.read().unwrap().unwrap().as_ptr() }
+    fn as_ptr(&self) -> *mut saucer_application { self.ptr.0.read().unwrap().unwrap().as_ptr() }
 }
 
 impl Collect for AppPtr {
     fn collect(self: Box<Self>) {
         unsafe {
-            let mut guard = self.ptr.write().unwrap();
+            let mut guard = self.ptr.0.write().unwrap();
             if let Some(ref ptr) = guard.take() {
                 saucer_application_free(ptr.as_ptr())
             }
@@ -60,7 +65,7 @@ impl Drop for UnsafeApp {
 
         // It's possible that the collector free the pointer before posting, so a read lock is required.
         // The dropping process acquires a write lock, so if the `ptr` is `Some`, it must be valid.
-        let guard = ptr.read().unwrap();
+        let guard = ptr.0.read().unwrap();
         if let Some(ref ptr) = *guard {
             Self::post_raw(ptr.as_ptr(), move || {
                 wk.upgrade().expect("Collector dropped before app is freed").collect()
@@ -72,9 +77,10 @@ impl Drop for UnsafeApp {
 impl UnsafeApp {
     fn new(collector: Arc<UnsafeCollector>, mut opt: AppOptions) -> Self {
         let ptr = unsafe { saucer_application_init(opt.as_ptr()) };
-        let ptr = Arc::new(RwLock::new(Some(NonNull::new(ptr).expect("Failed to create app"))));
         let ptr = AppPtr {
-            ptr,
+            ptr: Arc::new(ReplaceableAppPtr(RwLock::new(Some(
+                NonNull::new(ptr).expect("Failed to create app")
+            )))),
             _owns: PhantomData,
             _counter: collector.count()
         };

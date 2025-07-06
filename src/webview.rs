@@ -127,10 +127,10 @@ impl UnsafeWebview {
 
         unsafe { saucer_webview_on_message_with_arg(self.as_ptr(), None, null_mut()) }
 
-        if let Some(ref mut wp) = self.ptr {
-            if let Some(ptr) = wp.message_handler.take() {
-                unsafe { drop(Box::from_raw(ptr)) }
-            }
+        if let Some(ref mut wp) = self.ptr
+            && let Some(ptr) = wp.message_handler.take()
+        {
+            unsafe { drop(Box::from_raw(ptr)) }
         }
     }
 

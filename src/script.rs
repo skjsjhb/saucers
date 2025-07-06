@@ -26,18 +26,18 @@ impl Drop for Script {
     fn drop(&mut self) { unsafe { saucer_script_free(self.ptr.as_ptr()) } }
 }
 
-impl Into<SAUCER_LOAD_TIME> for ScriptLoadTime {
-    fn into(self) -> SAUCER_LOAD_TIME {
-        match self {
+impl From<ScriptLoadTime> for SAUCER_LOAD_TIME {
+    fn from(value: ScriptLoadTime) -> Self {
+        match value {
             ScriptLoadTime::Creation => SAUCER_LOAD_TIME_SAUCER_LOAD_TIME_CREATION,
             ScriptLoadTime::Ready => SAUCER_LOAD_TIME_SAUCER_LOAD_TIME_READY
         }
     }
 }
 
-impl Into<SAUCER_WEB_FRAME> for ScriptWebFrame {
-    fn into(self) -> SAUCER_WEB_FRAME {
-        match self {
+impl From<ScriptWebFrame> for SAUCER_WEB_FRAME {
+    fn from(value: ScriptWebFrame) -> Self {
+        match value {
             ScriptWebFrame::Top => SAUCER_WEB_FRAME_SAUCER_WEB_FRAME_TOP,
             ScriptWebFrame::All => SAUCER_WEB_FRAME_SAUCER_WEB_FRAME_ALL
         }
