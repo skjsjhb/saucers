@@ -16,6 +16,25 @@
 
 And by putting them together you can build cooler hybrid apps.
 
+## Important Notes about Compilation
+
+This library pulls saucer (and its dependencies) and compiles them on the fly when building.
+Such workflow makes certain limitations apply:
+
+- A nightly Rust compiler is required (refer to [`rust-toolchain.toml`](rust-toolchain.toml) for recommendation).
+- A C++ compiler which supports C++23.
+  Saucer [checks for this](https://github.com/saucer/saucer/blob/v6.0.1/CMakeLists.txt#L37C1-L47C8) when building and
+  an outdated compiler will fail the build.
+- Clang (or `libclang`) [for `bindgen`](https://rust-lang.github.io/rust-bindgen/requirements.html).
+- Make sure to have [system dependencies](https://saucer.app/docs/getting-started/dependencies) installed.
+- When building for Windows, MSVC is required.
+- Saucer uses CPM to pull compile-time dependencies. It may take noticeable time to compile this crate during the build
+  process.
+
+This library performs static linking on Windows (with MSVC) and emits a dynamic linked library on all other platforms.
+The emitted library is automatically placed into the target directory can should be shipped with the app using it.
+We're actively working on linking them statically on all platforms.
+
 ## Example
 
 > [!WARNING]
@@ -100,10 +119,8 @@ fn main() {
 
 - This project is built on top of the [C-Bindings for saucer](https://github.com/saucer/bindings), which exports only a
   subset (major parts, but not all) of the C++ API. We currently have no plan to integrate with the C++ API.
-- When building for Windows, only MSVC is currently supported.
 - Backend cannot be customized yet.
 - Safety (mostly the `Send` trait) of certain APIs are not fully verified.
-- A nightly Rust compiler is required.
 
 ## License
 

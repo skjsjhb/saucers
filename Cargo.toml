@@ -1,7 +1,12 @@
 [package]
 name = "saucers"
+description = "Rust bindings for saucer, the C++ webview library."
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+homepage = "https://github.com/skjsjhb/saucers"
+repository = "https://github.com/skjsjhb/saucers"
+readme = "README.md"
 
 [build-dependencies]
 bindgen = "0.72.0"
