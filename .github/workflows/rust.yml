@@ -17,6 +17,8 @@ jobs:
         os: [ windows-latest, macos-latest, ubuntu-latest ]
 
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.os == 'ubuntu-latest' && 'archlinux:base-devel' || '' }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,12 +26,7 @@ jobs:
 
       - name: Install Dependencies
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt install libwebkitgtk-6.0-4 libwebkitgtk-6.0-dev libadwaita-1-dev bubblewrap
-
-      - uses: egor-tensin/setup-gcc@v1
-        if: matrix.os == 'ubuntu-latest'
-        with:
-          version: 14
+        run: sudo pacman --noconfirm -Syu cmake clang git gtk4 libadwaita webkitgtk-6.0 xorg-server-xvfb dbus bubblewrap-suid
 
       - name: Build
         run: cargo build --verbose
@@ -38,9 +35,9 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         timeout-minutes: 5
         run: |-
-          Xvfb :42 -screen 1 1920x1080x16 &
-          export DISPLAY=:42
-          sudo cargo test --verbose
+          eval $(dbus-launch --sh-syntax --exit-with-session)
+          export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+          xvfb-run cargo test --verbose
 
       - name: Test
         if: matrix.os == 'windows-latest'
