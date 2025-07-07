@@ -14,11 +14,11 @@ cmake = "0.1"
 
 [[bin]]
 name = "app-test-exec"
-path = "tests/app_test.rs"
+path = "src/bin/app_test.rs"
 
 [[bin]]
 name = "webview-test-exec"
-path = "tests/webview_test.rs"
+path = "src/bin/webview_test.rs"
 
 [lib]
 bench = false

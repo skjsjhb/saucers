@@ -18,8 +18,6 @@ use saucers::webview_events::TitleEvent;
 #[test]
 fn webview_test() { do_webview_test(); }
 
-fn main() { do_webview_test(); }
-
 fn do_webview_test() {
     let cc = Collector::new();
     let app = App::new(&cc, AppOptions::new("saucer"));
