@@ -90,6 +90,31 @@ CPMFindPackage(
         OPTIONS "saucer_static ON" "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON"
 )
 
+# Patches saucer sources
+set(SAUCER_PATCHED_FLAG "${CMAKE_CURRENT_BINARY_DIR}/.saucer_patched")
+
+find_program(PATCH_COMMAND patch)
+if (NOT PATCH_COMMAND)
+    message(FATAL_ERROR "Patch command not found. Please install 'patch' or ensure it's in your PATH.")
+endif ()
+
+add_custom_command(
+        OUTPUT "${SAUCER_PATCHED_FLAG}"
+        COMMAND ${CMAKE_COMMAND} -E touch "${SAUCER_PATCHED_FLAG}"
+        COMMAND "${PATCH_COMMAND}" -p0 -i "${CMAKE_CURRENT_SOURCE_DIR}/patches/cocoa.app.mm.patch"
+        WORKING_DIRECTORY "${saucer_SOURCE_DIR}/src"
+        COMMENT "Patching saucer sources..."
+)
+
+add_custom_target(
+        patch_saucer
+        ALL
+        DEPENDS
+        "${SAUCER_PATCHED_FLAG}"
+)
+
+add_dependencies(${PROJECT_NAME} patch_saucer)
+
 target_link_libraries(${PROJECT_NAME} PUBLIC saucer::saucer)
 
 # --------------------------------------------------------------------------------------------------------
