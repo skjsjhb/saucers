@@ -7,7 +7,11 @@ use saucers::collector::Collector;
 use saucers::options::AppOptions;
 
 #[test]
-fn app_test() {
+fn app_test() { do_app_test(); }
+
+fn main() { do_app_test(); }
+
+fn do_app_test() {
     let cc = Collector::new();
     let app = App::new(&cc, AppOptions::new("saucer"));
 

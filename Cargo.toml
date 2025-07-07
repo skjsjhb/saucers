@@ -12,5 +12,13 @@ readme = "README.md"
 bindgen = "0.72.0"
 cmake = "0.1"
 
+[[bin]]
+name = "app-test-exec"
+path = "tests/app_test.rs"
+
+[[bin]]
+name = "webview-test-exec"
+path = "tests/webview_test.rs"
+
 [lib]
 bench = false
