@@ -24,7 +24,7 @@ jobs:
 
       - name: Install Dependencies
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt install libwebkitgtk-6.0-4 libwebkitgtk-6.0-dev libadwaita-1-dev
+        run: sudo apt install libwebkitgtk-6.0-4 libwebkitgtk-6.0-dev libadwaita-1-dev bubblewrap
 
       - uses: egor-tensin/setup-gcc@v1
         if: matrix.os == 'ubuntu-latest'
@@ -37,7 +37,10 @@ jobs:
       - name: Test
         if: matrix.os == 'ubuntu-latest'
         timeout-minutes: 5
-        run: xvfb-run cargo test --verbose
+        run: |-
+          Xvfb :42 -screen 1 1920x1080x16 &
+          export DISPLAY=:42
+          sudo cargo test --verbose
 
       - name: Test
         if: matrix.os == 'windows-latest'
