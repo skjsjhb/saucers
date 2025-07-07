@@ -81,9 +81,9 @@ impl Drop for UnsafeWebview {
         // Unlike app, as each webview is associated with an app, we can safely just post the collector handle.
         let wk = self.collector.take().unwrap();
         self.app.post(move || {
-            wk.upgrade()
-                .expect("Collector dropped before webview is freed")
-                .collect()
+            if let Some(cc) = wk.upgrade() {
+                cc.collect();
+            }
         });
     }
 }

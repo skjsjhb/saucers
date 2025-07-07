@@ -68,7 +68,12 @@ impl Drop for UnsafeApp {
         let guard = ptr.0.read().unwrap();
         if let Some(ref ptr) = *guard {
             Self::post_raw(ptr.as_ptr(), move || {
-                wk.upgrade().expect("Collector dropped before app is freed").collect()
+                // On some platform (e.g. GTK), the posted closure may still be executed even when the event loop has
+                // already stopped, and the app has been dropped (so does the collector). At the time the closure is
+                // being called, it's possible that the collector is no longer available.
+                if let Some(cc) = wk.upgrade() {
+                    cc.collect();
+                }
             });
         }
     }
