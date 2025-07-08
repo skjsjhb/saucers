@@ -26,7 +26,7 @@ jobs:
 
       - name: Install Dependencies
         if: matrix.os == 'ubuntu-latest'
-        run: sudo pacman --noconfirm -Syu cmake clang git gtk4 libadwaita webkitgtk-6.0 xorg-server-xvfb dbus bubblewrap-suid
+        run: sudo pacman --noconfirm -Syu cmake clang git gtk4 libadwaita webkitgtk-6.0 xorg-server-xvfb
 
       - name: Build
         run: cargo build --verbose
@@ -35,14 +35,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         timeout-minutes: 5
         run: |-
-          eval $(dbus-launch --sh-syntax --exit-with-session)
           export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
-          xvfb-run cargo test --verbose
+          xvfb-run cargo test --verbose --test *
 
       - name: Test
         if: matrix.os == 'windows-latest'
         timeout-minutes: 5
-        run: cargo test --verbose
+        run: cargo test --verbose --test *
 
       - name: Test
         if: matrix.os == 'macos-latest'
