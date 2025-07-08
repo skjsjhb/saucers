@@ -20,16 +20,6 @@ fn main() {
         let profile = std::env::var("PROFILE").unwrap();
         let is_debug = profile == "debug" || profile == "test";
 
-        let arch = match std::env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
-            "x86" => "x86",
-            "x86_64" => "x64",
-            "aarch64" => "arm64",
-            it => panic!("Unsupported architecture: {it}")
-        };
-        println!(
-            "cargo:rustc-link-search=native={}/build/_deps/saucer-build/nuget/Microsoft.Web.WebView2/build/native/{arch}",
-            dst.display()
-        );
         println!("cargo:rustc-link-lib=static=saucer-bindings");
         println!("cargo:rustc-link-lib=static=saucer");
 

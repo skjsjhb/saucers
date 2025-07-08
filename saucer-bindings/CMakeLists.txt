@@ -87,7 +87,7 @@ CPMFindPackage(
         NAME saucer
         VERSION 6.0.0
         GIT_REPOSITORY "https://github.com/saucer/saucer"
-        OPTIONS "saucer_static ON" "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON"
+        OPTIONS "saucer_static ON" "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON" "saucer_package_all ON"
 )
 
 # Patches saucer sources
