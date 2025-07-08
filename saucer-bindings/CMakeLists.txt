@@ -102,6 +102,7 @@ add_custom_command(
         OUTPUT "${SAUCER_PATCHED_FLAG}"
         COMMAND ${CMAKE_COMMAND} -E touch "${SAUCER_PATCHED_FLAG}"
         COMMAND "${PATCH_COMMAND}" -p0 -i "${CMAKE_CURRENT_SOURCE_DIR}/patches/cocoa.app.mm.patch"
+        COMMAND "${PATCH_COMMAND}" -p0 -i "${CMAKE_CURRENT_SOURCE_DIR}/patches/wkg.scheme.cpp.patch"
         WORKING_DIRECTORY "${saucer_SOURCE_DIR}/src"
         COMMENT "Patching saucer sources..."
 )
