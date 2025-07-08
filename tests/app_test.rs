@@ -33,16 +33,15 @@ fn do_app_test() {
 
     let app3 = app.clone();
     app.pool_emplace(move || {
-        let app4 = app3.clone();
-        app3.post(move || {
-            assert!(app4.is_thread_safe(), "Posted tasks should run on event thread");
-            app4.quit();
+        app3.post(move |app| {
+            assert!(app.is_thread_safe(), "Posted tasks should run on event thread");
+            app.quit();
         });
     });
 
     let app5 = app.clone();
     std::thread::spawn(move || {
-        app5.post(move || {
+        app5.post(move |_| {
             let _ = &arc1;
         });
     })

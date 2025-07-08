@@ -106,10 +106,16 @@ impl UnsafeApp {
     fn post_raw(ptr: *mut saucer_application, fun: impl FnOnce() + Send + 'static) {
         let bb = Box::new(fun) as Box<dyn FnOnce()>;
         let cpt = Box::into_raw(Box::new(bb)) as *mut c_void;
-        unsafe { saucer_application_post_with_arg(ptr, Some(c_call_trampoline), cpt) }
+        unsafe { saucer_application_post_with_arg(ptr, Some(post_trampoline), cpt) }
     }
 
-    fn post(&self, fun: impl FnOnce() + Send + 'static) { Self::post_raw(self.as_ptr(), fun) }
+    fn post(&self, ar: AppRef, fun: impl FnOnce(App) + Send + 'static) {
+        Self::post_raw(self.as_ptr(), move || {
+            if let Some(a) = ar.upgrade() {
+                fun(a);
+            }
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -120,7 +126,7 @@ impl App {
         Self(Arc::new(UnsafeApp::new(collector.get_inner(), opt)))
     }
 
-    pub fn post(&self, fun: impl FnOnce() + Send + 'static) { self.0.post(fun); }
+    pub fn post(&self, fun: impl FnOnce(App) + Send + 'static) { self.0.post(self.downgrade(), fun); }
 
     pub fn is_thread_safe(&self) -> bool { self.0.is_host_thread() }
 
@@ -131,7 +137,7 @@ impl App {
         if !self.is_thread_safe() {
             return;
         }
-        unsafe { saucer_application_run(self.0.as_ptr()) }
+        unsafe { saucer_application_run(self.as_ptr()) }
     }
 
     /// Runs the event loop (non-blocking).
@@ -141,36 +147,43 @@ impl App {
         if !self.is_thread_safe() {
             return;
         }
-        unsafe { saucer_application_run_once(self.0.as_ptr()) }
+        unsafe { saucer_application_run_once(self.as_ptr()) }
     }
 
     pub fn pool_submit(&self, fun: impl FnOnce() + Send + 'static) {
         let bb = Box::new(fun) as Box<dyn FnOnce()>;
         let ptr = Box::into_raw(Box::new(bb)) as *mut c_void;
-        unsafe { saucer_application_pool_submit_with_arg(self.0.as_ptr(), Some(c_call_trampoline), ptr) }
+        unsafe { saucer_application_pool_submit_with_arg(self.as_ptr(), Some(post_trampoline), ptr) }
     }
 
     pub fn pool_emplace(&self, fun: impl FnOnce() + Send + 'static) {
         let bb = Box::new(fun) as Box<dyn FnOnce()>;
         let ptr = Box::into_raw(Box::new(bb)) as *mut c_void;
-        unsafe { saucer_application_pool_emplace_with_arg(self.0.as_ptr(), Some(c_call_trampoline), ptr) }
+        unsafe { saucer_application_pool_emplace_with_arg(self.as_ptr(), Some(post_trampoline), ptr) }
     }
 
     pub fn quit(&self) {
         if self.is_thread_safe() {
-            unsafe { saucer_application_quit(self.0.as_ptr()) }
+            unsafe { saucer_application_quit(self.as_ptr()) }
         } else {
-            let this = self.clone();
-            self.post(move || this.quit());
+            self.post(move |app| unsafe { saucer_application_quit(app.as_ptr()) });
         }
     }
 
     pub(crate) fn as_ptr(&self) -> *mut saucer_application { self.0.as_ptr() }
 
     pub(crate) fn get_collector(&self) -> Weak<UnsafeCollector> { self.0.collector.as_ref().unwrap().clone() }
+
+    fn downgrade(&self) -> AppRef { AppRef(Arc::downgrade(&self.0)) }
 }
 
-extern "C" fn c_call_trampoline(raw: *mut c_void) {
+struct AppRef(Weak<UnsafeApp>);
+
+impl AppRef {
+    fn upgrade(&self) -> Option<App> { Some(App(self.0.upgrade()?)) }
+}
+
+extern "C" fn post_trampoline(raw: *mut c_void) {
     unsafe {
         let bb = Box::from_raw(raw as *mut Box<dyn FnOnce()>);
         bb();

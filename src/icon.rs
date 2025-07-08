@@ -1,7 +1,7 @@
 use std::ffi::CString;
 use std::marker::PhantomData;
-use std::ptr::NonNull;
 use std::ptr::null_mut;
+use std::ptr::NonNull;
 
 use crate::capi::*;
 use crate::stash::Stash;
@@ -35,7 +35,7 @@ impl Icon {
         if ptr.is_null() { None } else { Some(Icon::from_ptr(ptr)) }
     }
 
-    pub fn from_data(stash: Stash<'_>) -> Option<Icon> {
+    pub fn from_data(stash: &Stash<'_>) -> Option<Icon> {
         let mut ptr: *mut saucer_icon = null_mut();
         unsafe {
             // Data copied internally in C

@@ -27,7 +27,8 @@ impl Stash<'_> {
 }
 
 impl<'a> Stash<'a> {
-    pub fn view(data: impl AsRef<[u8]> + 'a) -> Self {
+    pub fn view(data: &'a (impl AsRef<[u8]> + Sync + ?Sized)) -> Self {
+        // A stash cannot be modified, but it may be read from other threads and should be `Sync`.
         let ptr = unsafe {
             let data = data.as_ref();
             saucer_stash_view(data.as_ptr(), data.len())

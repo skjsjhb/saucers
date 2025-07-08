@@ -27,3 +27,4 @@ pub mod script;
 pub mod stash;
 pub mod webview;
 pub mod webview_events;
+pub mod scheme;

@@ -6,8 +6,11 @@ use saucers::app::App;
 use saucers::collector::Collector;
 use saucers::options::AppOptions;
 use saucers::prefs::Preferences;
+use saucers::scheme::register_scheme;
+use saucers::scheme::Response;
 use saucers::script::Script;
 use saucers::script::ScriptLoadTime;
+use saucers::stash::Stash;
 use saucers::webview::Webview;
 use saucers::webview_events::ClosedEvent;
 use saucers::webview_events::DomReadyEvent;
@@ -19,6 +22,8 @@ use saucers::webview_events::TitleEvent;
 fn webview_test() { do_webview_test(); }
 
 fn do_webview_test() {
+    register_scheme("foo");
+
     let cc = Collector::new();
     let app = App::new(&cc, AppOptions::new("saucer"));
     let w = Webview::new(&Preferences::new(&app)).unwrap();
@@ -52,11 +57,6 @@ fn do_webview_test() {
             }
         })
     );
-
-    w.inject(&Script::new(
-        "window.saucer.internal.send_message('')",
-        ScriptLoadTime::Ready
-    ));
 
     w.clear(ClosedEvent);
 
@@ -128,9 +128,43 @@ fn do_webview_test() {
         })
     );
 
-    w.on_message(move |w, _| -> bool {
-        w.close();
-        true
+    w.inject(&Script::new(
+        r#"
+        (async ()=>{
+            const res = await fetch("foo://domain/ping", {
+               method: "POST",
+               body: "ping!"
+            });
+
+            window.saucer.internal.send_message(await res.text());
+        })();
+        "#,
+        ScriptLoadTime::Ready
+    ));
+
+    w.handle_scheme_async("foo", {
+        let arc = arc.clone();
+        move |_, req, exc| {
+            let _ = &arc;
+            let st = req.content();
+            let body = String::from_utf8_lossy(st.data().unwrap());
+            assert_eq!(req.method(), "POST", "Method of scheme request should be correct");
+            assert_eq!(body, "ping!", "Body of scheme request should be correct");
+            let res = Response::new(&Stash::view("pong!".into()), "text/plain");
+
+            res.set_header("Access-Control-Allow-Origin", "*");
+            exc.resolve(res);
+        }
+    });
+
+    w.on_message({
+        let arc = arc.clone();
+        move |w, msg| -> bool {
+            let _ = &arc;
+            assert_eq!(msg, "pong!", "Message content should be correct");
+            w.close();
+            true
+        }
     });
 
     app.run();

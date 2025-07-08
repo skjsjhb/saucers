@@ -178,6 +178,20 @@ extern "C"
             static_cast<saucer::launch>(policy));
     }
 
+    void saucer_webview_handle_scheme_with_arg(saucer_handle *handle, const char *name,
+                                               saucer_scheme_handler_with_arg handler,
+                                               void *arg,
+                                               SAUCER_LAUNCH policy) {
+        handle->handle_scheme(
+            name,
+            [handle, handler, arg](saucer::scheme::request req, saucer::scheme::executor exec) {
+                auto *request = saucer_scheme_request::from(std::move(req));
+                auto *executor = saucer_scheme_executor::from(std::move(exec));
+                std::invoke(handler, handle, request, executor, arg);
+            },
+            static_cast<saucer::launch>(policy));
+    }
+
     void saucer_webview_remove_scheme(saucer_handle *handle, const char *name)
     {
         handle->remove_scheme(name);

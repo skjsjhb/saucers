@@ -8,6 +8,7 @@ use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::mpmc::Sender;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::RwLock;
 use std::sync::Weak;
 
@@ -19,11 +20,16 @@ use crate::ctor;
 use crate::embed::EmbedFile;
 use crate::prefs::Preferences;
 use crate::rtoc;
+use crate::scheme::Executor;
+use crate::scheme::Request;
 use crate::script::Script;
 
 pub(crate) struct WebviewPtr {
     ptr: NonNull<saucer_handle>,
+    // Message handlers are only ever called on the main thread so `Rc` + `RefCell` is sufficient.
     message_handler: Option<*mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, &str) -> bool>>>)>,
+    // Unlike message handlers, scheme handlers may be called outside the event thread and must be locked.
+    scheme_handlers: HashMap<String, *mut (WebviewRef, Arc<Mutex<Box<dyn FnMut(Webview, Request, Executor)>>>)>,
     _owns: PhantomData<saucer_handle>,
     _counter: Arc<()>,
 
@@ -47,6 +53,10 @@ impl Collect for WebviewPtr {
 
             if let Some(ptr) = self.message_handler {
                 drop(Box::from_raw(ptr));
+            }
+
+            for pt in self.scheme_handlers.into_values() {
+                drop(Box::from_raw(pt));
             }
 
             for dropper in self.dyn_event_droppers.into_values() {
@@ -80,7 +90,7 @@ impl Drop for UnsafeWebview {
 
         // Unlike app, as each webview is associated with an app, we can safely just post the collector handle.
         let wk = self.collector.take().unwrap();
-        self.app.post(move || {
+        self.app.post(move |_| {
             if let Some(cc) = wk.upgrade() {
                 cc.collect();
             }
@@ -107,6 +117,7 @@ impl UnsafeWebview {
             ptr: Some(WebviewPtr {
                 ptr,
                 message_handler: None,
+                scheme_handlers: HashMap::new(),
                 _owns: PhantomData,
                 _counter: collector.count(),
                 dyn_event_droppers: HashMap::new(),
@@ -148,6 +159,49 @@ impl UnsafeWebview {
         unsafe { saucer_webview_on_message_with_arg(self.as_ptr(), Some(on_message_trampoline), ptr as *mut c_void) }
         self.ptr.as_mut().unwrap().message_handler = Some(ptr);
     }
+
+    fn remove_scheme_handler(&mut self, name: impl AsRef<str>) {
+        if !self.app.is_thread_safe() {
+            return;
+        }
+
+        rtoc!(name => n; saucer_webview_remove_scheme(self.as_ptr(), n.as_ptr()));
+
+        if let Some(ptr) = self.ptr.as_mut().unwrap().scheme_handlers.remove(name.as_ref()) {
+            unsafe { drop(Box::from_raw(ptr)) }
+        }
+    }
+
+    fn replace_scheme_handler(
+        &mut self,
+        wk: WebviewRef,
+        name: impl AsRef<str>,
+        handler: impl FnMut(Webview, Request, Executor) + 'static,
+        is_async: bool
+    ) {
+        if !self.app.is_thread_safe() {
+            return;
+        }
+
+        self.remove_scheme_handler(name.as_ref());
+
+        let arc = Arc::new(Mutex::new(
+            Box::new(handler) as Box<dyn FnMut(Webview, Request, Executor)>
+        ));
+        let pair = (wk, arc);
+        let ptr = Box::into_raw(Box::new(pair));
+        let lp = if is_async {
+            SAUCER_LAUNCH_SAUCER_LAUNCH_ASYNC
+        } else {
+            SAUCER_LAUNCH_SAUCER_LAUNCH_SYNC
+        };
+
+        let name_s = name.as_ref().to_owned();
+
+        rtoc!(name => n ; saucer_webview_handle_scheme_with_arg(self.as_ptr(), n.as_ptr(), Some(scheme_trampoline), ptr as *mut c_void, lp ));
+
+        self.ptr.as_mut().unwrap().scheme_handlers.insert(name_s, ptr);
+    }
 }
 
 extern "C" fn on_message_trampoline(msg: *const c_char, raw: *mut c_void) -> bool {
@@ -158,6 +212,22 @@ extern "C" fn on_message_trampoline(msg: *const c_char, raw: *mut c_void) -> boo
     }
     let _ = Box::into_raw(bb); // Avoid dropping the handler
     true
+}
+
+extern "C" fn scheme_trampoline(
+    _: *mut saucer_handle,
+    req: *mut saucer_scheme_request,
+    exec: *mut saucer_scheme_executor,
+    raw: *mut c_void
+) {
+    let bb = unsafe { Box::from_raw(raw as *mut (WebviewRef, Arc<Mutex<Box<dyn FnMut(Webview, Request, Executor)>>>)) };
+    let arc = (*bb).1.clone();
+    if let Some(w) = bb.0.upgrade() {
+        let req = Request::from_ptr(req);
+        let exec = Executor::from_ptr(exec, w.app());
+        arc.lock().unwrap()(w, req, exec);
+    }
+    let _ = Box::into_raw(bb);
 }
 
 #[derive(Clone)]
@@ -238,6 +308,24 @@ impl Webview {
 
     pub fn inject(&self, script: &Script) { unsafe { saucer_webview_inject(self.as_ptr(), script.as_ptr()) } }
     pub fn execute(&self, code: impl AsRef<str>) { rtoc!(code => s; saucer_webview_execute(self.as_ptr(), s.as_ptr())) }
+
+    pub fn handle_scheme(&self, name: impl AsRef<str>, fun: impl FnMut(Webview, Request, Executor) + 'static) {
+        self.0
+            .write()
+            .unwrap()
+            .replace_scheme_handler(self.downgrade(), name, fun, false);
+    }
+
+    pub fn handle_scheme_async(
+        &self,
+        name: impl AsRef<str>,
+        fun: impl FnMut(Webview, Request, Executor) + Send + 'static
+    ) {
+        self.0
+            .write()
+            .unwrap()
+            .replace_scheme_handler(self.downgrade(), name, fun, true);
+    }
 
     pub fn visible(&self) -> bool { unsafe { saucer_window_visible(self.as_ptr()) } }
     pub fn focused(&self) -> bool { unsafe { saucer_window_focused(self.as_ptr()) } }

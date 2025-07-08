@@ -7,7 +7,6 @@ use crate::stash::Stash;
 
 pub struct EmbedFile<'a> {
     ptr: NonNull<saucer_embedded_file>,
-    _stash: Stash<'a>,
     _owns: PhantomData<(saucer_embedded_file, &'a ())>
 }
 
@@ -19,13 +18,12 @@ impl Drop for EmbedFile<'_> {
 }
 
 impl<'a> EmbedFile<'a> {
-    pub fn new(content: Stash<'a>, mime: impl AsRef<str>) -> Self {
+    pub fn new(content: &Stash<'a>, mime: impl AsRef<str>) -> Self {
         let cst = CString::new(mime.as_ref()).unwrap();
         let ptr = unsafe { saucer_embed(content.as_ptr(), cst.as_ptr()) };
 
         Self {
             ptr: NonNull::new(ptr).expect("Invalid embedded file"),
-            _stash: content,
             _owns: PhantomData
         }
     }

@@ -91,6 +91,12 @@ extern "C"
 
     SAUCER_EXPORT void saucer_webview_handle_scheme(saucer_handle *, const char *name, saucer_scheme_handler handler,
                                                     SAUCER_LAUNCH policy);
+
+    SAUCER_EXPORT void saucer_webview_handle_scheme_with_arg(saucer_handle *, const char *name,
+                                                             saucer_scheme_handler_with_arg handler,
+                                                             void *arg,
+                                                             SAUCER_LAUNCH policy);
+
     SAUCER_EXPORT void saucer_webview_remove_scheme(saucer_handle *, const char *name);
 
     SAUCER_EXPORT void saucer_webview_clear(saucer_handle *, SAUCER_WEB_EVENT event);

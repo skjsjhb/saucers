@@ -57,6 +57,9 @@ extern "C"
 
     typedef void (*saucer_scheme_handler)(saucer_handle *, saucer_scheme_request *, saucer_scheme_executor *);
 
+    typedef void (*saucer_scheme_handler_with_arg)(saucer_handle *, saucer_scheme_request *, saucer_scheme_executor *,
+                                                   void *arg);
+
 #ifdef __cplusplus
 }
 #endif
