@@ -11,12 +11,12 @@ use saucers::scheme::Response;
 use saucers::script::Script;
 use saucers::script::ScriptLoadTime;
 use saucers::stash::Stash;
+use saucers::webview::events::ClosedEvent;
+use saucers::webview::events::DomReadyEvent;
+use saucers::webview::events::FaviconEvent;
+use saucers::webview::events::MinimizeEvent;
+use saucers::webview::events::TitleEvent;
 use saucers::webview::Webview;
-use saucers::webview_events::ClosedEvent;
-use saucers::webview_events::DomReadyEvent;
-use saucers::webview_events::FaviconEvent;
-use saucers::webview_events::MinimizeEvent;
-use saucers::webview_events::TitleEvent;
 
 #[test]
 fn webview_test() { do_webview_test(); }

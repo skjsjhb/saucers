@@ -2,9 +2,9 @@ use saucers::app::App;
 use saucers::collector::Collector;
 use saucers::options::AppOptions;
 use saucers::prefs::Preferences;
+use saucers::webview::events::DomReadyEvent;
+use saucers::webview::events::FaviconEvent;
 use saucers::webview::Webview;
-use saucers::webview_events::DomReadyEvent;
-use saucers::webview_events::FaviconEvent;
 
 fn main() {
     // Create a collector to help freeing up resources.
