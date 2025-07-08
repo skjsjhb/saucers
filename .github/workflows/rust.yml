@@ -35,6 +35,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         timeout-minutes: 5
         run: |-
+          eval $(dbus-launch --sh-syntax --exit-with-session)
           export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
           xvfb-run cargo test --verbose --test '*'
 
