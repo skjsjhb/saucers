@@ -5,7 +5,7 @@ fn main() {
     let profile = std::env::var("PROFILE").unwrap();
     let is_debug = profile == "debug" || profile == "test";
 
-    let build_static = std::env::var("CARGO_FEATURE_STATIC_LIB").is_ok() && os == "windows";
+    let build_static = std::env::var("CARGO_FEATURE_STATIC_LIB").is_ok() && os != "macos";
     let crs_lto = std::env::var("CARGO_FEATURE_CROSS_LTO").is_ok() && build_static;
 
     let mut conf = cmake::Config::new("saucer-bindings");
@@ -23,15 +23,24 @@ fn main() {
         conf.define("SAUCERS_SHARED_LIB", "OFF");
     }
 
-    if os == "windows" && crs_lto {
-        conf.generator("Ninja");
-        conf.define("CMAKE_C_COMPILER", "clang-cl");
-        conf.define("CMAKE_CXX_COMPILER", "clang-cl");
-        conf.define("CMAKE_ASM_COMPILER", "clang-cl");
-        conf.define("CMAKE_AR", "llvm-lib");
+    if crs_lto && !is_debug {
+        conf.define("CMAKE_INTERPROCEDURAL_OPTIMIZATION", "ON");
+    }
 
-        if !is_debug {
-            conf.define("CMAKE_INTERPROCEDURAL_OPTIMIZATION", "ON");
+    if crs_lto {
+        if os == "windows" {
+            conf.generator("Ninja");
+            conf.define("CMAKE_C_COMPILER", "clang-cl");
+            conf.define("CMAKE_CXX_COMPILER", "clang-cl");
+            conf.define("CMAKE_ASM_COMPILER", "clang-cl");
+            conf.define("CMAKE_AR", "llvm-lib");
+        }
+
+        if os == "linux" {
+            conf.define("CMAKE_C_COMPILER", "clang");
+            conf.define("CMAKE_CXX_COMPILER", "clang");
+            conf.define("CMAKE_ASM_COMPILER", "clang");
+            conf.define("CMAKE_AR", "llvm-ar");
         }
     }
 
@@ -62,6 +71,13 @@ fn main() {
             println!("cargo:rustc-link-lib=dylib=user32");
             println!("cargo:rustc-link-lib=dylib=advapi32");
             println!("cargo:rustc-link-lib=dylib=ole32");
+        }
+
+        if os == "linux" {
+            println!("cargo:rustc-link-lib=dylib=stdc++");
+            pkg_config::probe_library("gtk4").unwrap();
+            pkg_config::probe_library("webkitgtk-6.0").unwrap();
+            pkg_config::probe_library("libadwaita-1").unwrap();
         }
     } else {
         println!("cargo:rustc-link-lib=dylib=saucer-bindings");

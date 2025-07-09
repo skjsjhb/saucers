@@ -11,6 +11,7 @@ readme = "README.md"
 [build-dependencies]
 bindgen = "0.72.0"
 cmake = "0.1"
+pkg-config = "0.3.32"
 
 [[bin]]
 name = "app-test-exec"
