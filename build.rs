@@ -37,6 +37,7 @@ fn main() {
 
     let dst = conf.build();
 
+    println!("cargo:rustc-link-search=native={}", dst.display());
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
 
     if build_static {
