@@ -33,14 +33,12 @@ fn main() {
     );
 
     // Registers a repeatable event handler for favicon event.
-    let on_favicon_id = w
-        .on(
-            FaviconEvent,
-            Box::new(|_, icon| {
-                println!("Wow, you have a favicon of {} bytes!", icon.data().size());
-            })
-        )
-        .unwrap();
+    let on_favicon_id = w.on(
+        FaviconEvent,
+        Box::new(|_, icon| {
+            println!("Wow, you have a favicon of {} bytes!", icon.data().size());
+        })
+    );
 
     // Handles incoming webview messages.
     // This API forwards the message as-is, allowing more complex channels to be built on it.

@@ -4,6 +4,7 @@ use std::ptr::NonNull;
 use crate::capi::*;
 use crate::ctor;
 
+/// Contains details about a navigation action.
 pub struct WebviewNavigation {
     ptr: NonNull<saucer_navigation>,
     _owns: PhantomData<saucer_navigation>
@@ -25,11 +26,15 @@ impl WebviewNavigation {
         }
     }
 
+    /// Checks whether the navigation requests a new window to be created.
     pub fn is_new_window(&self) -> bool { unsafe { saucer_navigation_new_window(self.ptr.as_ptr()) } }
 
+    /// Checks whether the navigation is initiated by a redirection.
     pub fn is_redirection(&self) -> bool { unsafe { saucer_navigation_redirection(self.ptr.as_ptr()) } }
 
+    /// Checks whether the navigation is initiated by user actions.
     pub fn is_user_initiated(&self) -> bool { unsafe { saucer_navigation_user_initiated(self.ptr.as_ptr()) } }
 
+    /// Gets the URL that's about to navigate to.
     pub fn url(&self) -> String { ctor!(free, saucer_navigation_url(self.ptr.as_ptr())) }
 }

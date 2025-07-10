@@ -5,6 +5,11 @@ use std::ptr::NonNull;
 use crate::app::App;
 use crate::capi::*;
 
+/// Preferences object for creating a [`crate::webview::Webview`].
+///
+/// Each preferences object references to an [`App`], which is later passed to the [`crate::webview::Webview`] that's
+/// created using it. The lifetime of this object and the created [`crate::webview::Webview`]s are then tied to the
+/// [`App`]. See the docs of [`crate::webview::Webview`] for details.
 pub struct Preferences<'a> {
     inner: NonNull<saucer_preferences>,
     app: &'a App,
@@ -23,7 +28,7 @@ impl Drop for Preferences<'_> {
 }
 
 impl<'a> Preferences<'a> {
-    /// Creates a new preferences set for the specified app.
+    /// Creates a new preferences object that references to the given app.
     pub fn new(app: &'a App) -> Self {
         let p = unsafe {
             // SAFETY: The preferences is later passed to a webview window which (we believe) will use the pointer
@@ -38,17 +43,20 @@ impl<'a> Preferences<'a> {
         }
     }
 
-    /// Sets whether cookies should be persistent.
+    /// Sets whether cookies should be persistent. Cookies are persistent by default.
     pub fn set_persistent_cookies(&mut self, persist: bool) {
         unsafe { saucer_preferences_set_persistent_cookies(self.inner.as_ptr(), persist) }
     }
 
-    /// Sets whether hard acceleration is enabled.
+    /// Sets whether hardware acceleration is enabled. Hardware acceleration is enabled by default.
     pub fn set_hardware_acceleration(&mut self, acc: bool) {
         unsafe { saucer_preferences_set_hardware_acceleration(self.inner.as_ptr(), acc) }
     }
 
     /// Sets the path to store browser data.
+    ///
+    /// By default, saucer chooses a path either by computing a default value, or use implementation-defined defaults.
+    /// Such behavior is not guaranteed to be consistent, thus it's recommended to always override the path manually.
     pub fn set_storage_path(&mut self, pt: impl AsRef<str>) {
         unsafe {
             let cstr = CString::new(pt.as_ref()).unwrap();
@@ -56,7 +64,7 @@ impl<'a> Preferences<'a> {
         }
     }
 
-    /// Adds a browser flag.
+    /// Adds a browser flag. Available flags and their usage are implementation-defined.
     pub fn add_browser_flag(&mut self, flag: impl AsRef<str>) {
         unsafe {
             let cstr = CString::new(flag.as_ref()).unwrap();
@@ -64,7 +72,7 @@ impl<'a> Preferences<'a> {
         }
     }
 
-    /// Sets the user agent.
+    /// Sets the user agent. The default UA string is implementation-defined.
     pub fn set_user_agent(&mut self, ua: impl AsRef<str>) {
         unsafe {
             let cstr = CString::new(ua.as_ref()).unwrap();

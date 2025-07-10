@@ -88,8 +88,7 @@ fn do_webview_test() {
                     let _ = &arc;
                 }
             })
-        )
-        .unwrap(),
+        ),
         Ordering::Relaxed
     );
 
@@ -101,8 +100,7 @@ fn do_webview_test() {
                 let _ = &arc;
             }
         })
-    )
-    .unwrap();
+    );
 
     w.on(
         TitleEvent,
@@ -113,8 +111,7 @@ fn do_webview_test() {
                 tx.send(title.to_owned()).unwrap();
             }
         })
-    )
-    .unwrap();
+    );
 
     w.once(
         ClosedEvent,
@@ -142,7 +139,7 @@ fn do_webview_test() {
         ScriptLoadTime::Ready
     ));
 
-    w.handle_scheme_async("foo", {
+    w.handle_scheme("foo", {
         let arc = arc.clone();
         move |_, req, exc| {
             let _ = &arc;
@@ -153,7 +150,7 @@ fn do_webview_test() {
             let res = Response::new(&Stash::view("pong!".into()), "text/plain");
 
             res.set_header("Access-Control-Allow-Origin", "*");
-            exc.resolve(res);
+            exc.resolve(&res);
         }
     });
 

@@ -7,6 +7,7 @@ use crate::capi::*;
 use crate::ctor;
 use crate::stash::Stash;
 
+/// Contains request details of a request to a custom scheme.
 pub struct Request {
     ptr: NonNull<saucer_scheme_request>,
     _owns: PhantomData<saucer_scheme_request>
@@ -27,6 +28,10 @@ impl Request {
         }
     }
 
+    /// Gets the request headers.
+    ///
+    /// A copy of the headers is created each time this method is called. Consider reusing the headers instead of
+    /// calling this method repetitively.
     pub fn headers(&self) -> Vec<(String, String)> {
         let mut keys: *mut *mut c_char = std::ptr::null_mut();
         let mut values: *mut *mut c_char = std::ptr::null_mut();
@@ -59,10 +64,16 @@ impl Request {
         headers
     }
 
+    /// Gets the request URL.
     pub fn url(&self) -> String { ctor!(free, saucer_scheme_request_url(self.ptr.as_ptr())) }
 
+    /// Gets the request method.
     pub fn method(&self) -> String { ctor!(free, saucer_scheme_request_method(self.ptr.as_ptr())) }
 
+    /// Gets the request content.
+    ///
+    /// A copy of the body is created each time this method is called. Consider reusing the body instead of calling this
+    /// method repetitively.
     pub fn content(&self) -> Stash<'static> {
         let ptr = unsafe { saucer_scheme_request_content(self.ptr.as_ptr()) };
         Stash::from_ptr(ptr)

@@ -5,6 +5,11 @@ use crate::app::App;
 use crate::capi::*;
 use crate::scheme::Response;
 
+/// Error types that can be used as the argument of [`Executor::reject`].
+///
+/// Currently, due to a missing CORS header, the enum variant used to reject the request is not accessible from the
+/// frontend. It's advised to always resolve the request with a [`Response`], which is capable for sending more detailed
+/// rejection message.
 pub enum SchemeError {
     NotFound,
     Invalid,
@@ -25,6 +30,10 @@ impl From<SchemeError> for SAUCER_SCHEME_ERROR {
     }
 }
 
+/// The executor object used to resolve or reject a request to a custom scheme.
+///
+/// An executor is passed as an argument to the scheme handler when a request comes. The handler can then
+/// [`Executor::resolve`] or [`Executor::reject`] the request.
 pub struct Executor {
     ptr: Option<NonNull<saucer_scheme_executor>>,
     app: App,
@@ -51,33 +60,32 @@ impl Executor {
         }
     }
 
-    pub fn resolve_here(self, res: &Response<'_>) {
+    /// Resolves with the given response.
+    ///
+    /// To avoid data copying (as response payload can be large), this method uses a borrow-only approach to send the
+    /// response. As the C API does not know about Rust data lifetimes, its original capability of resolving
+    /// asynchronously can't be made safe, making this method only callable from the event thread. To resolve from other
+    /// threads, use [`crate::webview::Webview::post`] and move/copy the payload optionally.
+    ///
+    /// # Panics
+    ///
+    /// Panics if not called on the event thread.
+    pub fn resolve(self, res: &Response<'_>) {
         if !self.app.is_thread_safe() {
-            panic!("Scheme executor can only be resolved asynchronously on the event thread")
+            panic!("Scheme executor can only be resolved on the event thread")
         }
 
         // This function internally forwards the data to the event thread and resolve there, so technically it's safe
         // to call it directly. However, the C library does not handle Rust lifetimes correctly, so it's up to us to
-        // only call it on the event thread and provide another method for async resolving.
+        // only call it on the event thread.
         let ptr = self.ptr.expect("Resolving a destroyed executor");
         unsafe { saucer_scheme_executor_resolve(ptr.as_ptr(), res.as_ptr()) }
     }
 
-    pub fn resolve(mut self, res: Response<'static>) {
-        if self.app.is_thread_safe() {
-            self.resolve_here(&res);
-        } else {
-            let ptr = self.ptr.take().expect("Resolving a destroyed executor").as_ptr() as usize;
-            self.app.post(move |_| {
-                let ptr = ptr as *mut saucer_scheme_executor;
-                unsafe {
-                    saucer_scheme_executor_resolve(ptr, res.as_ptr());
-                    saucer_scheme_executor_free(ptr);
-                }
-            });
-        }
-    }
-
+    /// Rejects with the given [`SchemeError`]. Unlike [`Self::resolve`], this method can be called on any thread.
+    ///
+    /// As described in [`SchemeError`], current implementation is missing a CORS header and the rejection message can't
+    /// be identified by the frontend. Consider using [`Self::resolve`] with a status code instead.
     pub fn reject(self, ex: SchemeError) {
         unsafe { saucer_scheme_executor_reject(self.ptr.expect("Resolving a destroyed executor").as_ptr(), ex.into()) }
     }

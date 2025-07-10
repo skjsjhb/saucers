@@ -88,18 +88,47 @@ macro_rules! make_window_event {
 // Some editors seem unable to expand macros with `macro_metavar_expr_concat` correctly.
 // The event structs are extracted here for better DX.
 
+/// Fired when the DOM is ready.
 pub struct DomReadyEvent;
+
+/// Fired when the page is about to navigate.
+///
+/// Return `false` from the event handler to prevent it.
 pub struct NavigateEvent;
+
+/// Fired when the page navigates.
 pub struct NavigatedEvent;
+
+/// Fired when the page title changes.
 pub struct TitleEvent;
+
+/// Fired when the favicon changes.
 pub struct FaviconEvent;
+
+/// Fired when the page starts to load or has finished loading.
 pub struct LoadEvent;
+
+/// Fired when the decoration status of the window changes.
 pub struct DecoratedEvent;
+
+/// Fired when the window is maximized or unmaximized.
 pub struct MaximizeEvent;
+
+/// Fired when the window is minimized or unminimized.
 pub struct MinimizeEvent;
+
+/// Fired when the window is closed.
 pub struct ClosedEvent;
+
+/// Fired when the window size changes.
 pub struct ResizeEvent;
+
+/// Fired when the window is focused or loses focus.
 pub struct FocusEvent;
+
+/// Fired when the window is about to close.
+///
+/// Return `false` from the event handler to prevent it.
 pub struct CloseEvent;
 
 make_webview_event!(DomReady() -> (), DOM_READY, dom_ready);
@@ -123,9 +152,27 @@ pub enum WebviewLoadState {
 }
 
 impl Webview {
-    pub fn on<T: WebviewEvent>(&self, _: T, handler: Box<T::Handler>) -> Option<u64> {
+    /// Adds an event handler for the event represented by `T`. The arguments and the return value are specified by the
+    /// associated `Handler` type of `T`. Both the event handler and this method will (can) only be called on the event
+    /// thread.
+    ///
+    /// Returns a unique ID in the scope of this event, which can later be used to unregister the handler.
+    ///
+    /// Like [`Webview::on_message`], event handlers are dropped when being removed via [`Self::off`]. If an event
+    /// handler is still active when the webview is dropped, it's dropped at least not later than the
+    /// [`crate::collector::Collector`] referenced by the app of this webview.
+    ///
+    /// # Don't Capture Handles
+    ///
+    /// Like [`Self::on_message`], capturing handles in handlers added by this method may interfere the correct
+    /// dropping behavior and should be avoided. See the docs there for details.
+    ///
+    /// # Panics
+    ///
+    /// Panics if not called on the event thread.
+    pub fn on<T: WebviewEvent>(&self, _: T, handler: Box<T::Handler>) -> u64 {
         if !self.is_event_thread() {
-            return None;
+            panic!("Event handlers must be added on the event thread.")
         }
 
         // Repeatable handlers are fully managed by the webview handle.
@@ -150,12 +197,22 @@ impl Webview {
             old_dropper();
         }
 
-        Some(id)
+        id
     }
 
+    /// Like [`Self::on`], but the event handler is only fired once. This allows the event handler to loosen the
+    /// [`FnMut`] bound to [`FnOnce`]. Other usages, limitations and caveats remain the same as [`Self::on`].
+    ///
+    /// Unlike [`Self::on`], once a handler is attached using this method, there is no way to cancel it. However, the
+    /// event handler will still be properly dropped like uncleared event handlers added by [`Self::on`], even if it has
+    /// never been called.
+    ///
+    /// # Panics
+    ///
+    /// Panics if not called on the event thread.
     pub fn once<T: WebviewEvent>(&self, _: T, handler: Box<T::OnceHandler>) {
         if !self.is_event_thread() {
-            return;
+            panic!("Event handlers must be added on the event thread.")
         }
 
         // Unlike repeatable handlers, one-time handler may only be called once, so it must be taken by value.
@@ -204,6 +261,9 @@ impl Webview {
         }
     }
 
+    /// Removes a previously added event handler for event type `T` with the given ID.
+    ///
+    /// This method must be called on the event thread, or it does nothing.
     pub fn off<T: WebviewEvent>(&self, _: T, id: u64) {
         if !self.is_event_thread() {
             return;
@@ -219,6 +279,9 @@ impl Webview {
         }
     }
 
+    /// Removes all handlers of the event type `T`.
+    ///
+    /// This method must be called on the event thread, or it does nothing.
     pub fn clear<T: WebviewEvent>(&self, _: T) {
         if !self.is_event_thread() {
             return;
@@ -227,8 +290,21 @@ impl Webview {
         unsafe { T::clear(self.as_ptr()) }
 
         let mut guard = self.0.write().unwrap();
-        for (_, dropper) in guard.ptr.as_mut().unwrap().dyn_event_droppers.drain() {
-            dropper();
+
+        let mm = &mut guard.ptr.as_mut().unwrap().dyn_event_droppers;
+
+        let mut removal = Vec::new();
+
+        for (k, _) in &*mm {
+            if k.0 == T::event_id() {
+                removal.push(*k);
+            }
+        }
+
+        for k in removal {
+            if let Some(dropper) = mm.remove(&k) {
+                dropper();
+            }
         }
     }
 }

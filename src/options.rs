@@ -6,6 +6,7 @@ use std::ptr::NonNull;
 use std::ptr::null_mut;
 
 use crate::capi::*;
+use crate::rtoc;
 
 /// Options for the application.
 pub struct AppOptions {
@@ -36,14 +37,10 @@ impl Drop for AppOptions {
 }
 
 impl AppOptions {
-    /// Creates a new options pack with specified ID.
-    pub fn new(id: &str) -> Self {
-        let cst = CString::new(id).unwrap();
+    /// Creates a new set of options with specified ID.
+    pub fn new(id: impl AsRef<str>) -> Self {
+        let ptr = rtoc!(id => i; saucer_options_new(i.as_ptr())); // Value copied in C
 
-        let ptr = unsafe {
-            // SAFETY: Value is freed when dropping
-            saucer_options_new(cst.as_ptr()) // Value copied in C
-        };
         Self {
             inner: NonNull::new(ptr).expect("Failed to create options"),
             args: None,
@@ -52,6 +49,9 @@ impl AppOptions {
     }
 
     /// Sets arguments passed to the app.
+    ///
+    /// This does not seem to have any effect in the C API, but the value is stored for the Qt backend and may be
+    /// reserved for future use.
     pub fn set_args(&mut self, args: impl IntoIterator<Item = impl AsRef<str>>) {
         let mut v: Vec<*mut c_char> = args
             .into_iter()
@@ -77,6 +77,12 @@ impl AppOptions {
     }
 
     /// Sets number of threads used for async dispatching.
+    ///
+    /// Saucer internally maintains a thread pool to launch async scheme handlers. This option controls how much
+    /// threads are used for such purpose. Setting this value to 0 disables async scheme handlers and embedded files
+    /// that uses them.
+    ///
+    /// The default value is determined by the hardware concurrency.
     pub fn set_threads(&mut self, th: usize) {
         unsafe {
             saucer_options_set_threads(self.inner.as_ptr(), th);

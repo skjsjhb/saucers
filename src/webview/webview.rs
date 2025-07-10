@@ -26,7 +26,7 @@ use crate::script::Script;
 
 pub(crate) struct WebviewPtr {
     ptr: NonNull<saucer_handle>,
-    // Message handlers are only ever called on the main thread so `Rc` + `RefCell` is sufficient.
+    // Message handlers are only ever called on the event thread so `Rc` + `RefCell` is sufficient.
     message_handler: Option<*mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, &str) -> bool>>>)>,
     // Unlike message handlers, scheme handlers may be called outside the event thread and must be locked.
     scheme_handlers: HashMap<String, *mut (WebviewRef, Arc<Mutex<Box<dyn FnMut(Webview, Request, Executor)>>>)>,
@@ -92,7 +92,7 @@ impl Drop for UnsafeWebview {
         let wk = self.collector.take().unwrap();
         self.app.post(move |_| {
             if let Some(cc) = wk.upgrade() {
-                cc.collect();
+                cc.try_collect();
             }
         });
     }
@@ -147,7 +147,7 @@ impl UnsafeWebview {
 
     fn replace_message_handler(&mut self, wk: WebviewRef, fun: impl FnMut(Webview, &str) -> bool + 'static) {
         if !self.app.is_thread_safe() {
-            return;
+            panic!("Message handlers cannot be altered outside the event thread.");
         }
 
         self.remove_message_handler();
@@ -180,7 +180,7 @@ impl UnsafeWebview {
         is_async: bool
     ) {
         if !self.app.is_thread_safe() {
-            return;
+            panic!("Scheme handlers cannot be altered outside the event thread.");
         }
 
         self.remove_scheme_handler(name.as_ref());
@@ -230,30 +230,136 @@ extern "C" fn scheme_trampoline(
     let _ = Box::into_raw(bb);
 }
 
+/// The webview handle.
+///
+/// A webview handle manages the window and (possibly) the browser process behind it. Like [`App`], the handle is
+/// designed to be sharable among threads, but certain features are restricted to the event thread, see method docs for
+/// details.
+///
+/// Like [`App`], webview handles are clonable, but cloning a handle does not clone the underlying webview window. A new
+/// webview must be created using the [`Webview::new`] constructor. Similarly, dropping a webview handle does not destroy
+/// the window or its web contents, unless it's the last handle present in the process.
+///
+/// Note that the webview window is destroyed when the last handle referring to it is dropped:
+///
+/// ```no_run
+/// use saucers::app::App;
+/// use saucers::prefs::Preferences;
+/// use saucers::webview::Webview;
+///
+/// fn early_destroyed(app: App) {
+///     let w = Webview::new(&Preferences::new(&app));
+///     // Oh, no! The webview is dropped here and the window is destroyed!
+///     // drop(w);
+/// }
+/// ```
+///
+/// It's up to the user to keep at least one handle during the expected lifetime of the webview.
+///
+/// Like [`App`], capturing a webview handle in various handlers can lead to circular references easily and will block
+/// the underlying resources from being freed. It's advised to use [`Weak`] to prevent directly capturing a handle.
+///
+/// # A [`Webview`] Is an [`App`]
+///
+/// A webview handle internally holds an [`App`] handle and should be seen as an equivalent to the [`App`] handle,
+/// meaning that whenever considering the usage of [`App`] handles, all [`Webview`] handles must also be taken into
+/// account. For example:
+///
+/// ```should_panic
+/// use saucers::app::App;
+/// use saucers::collector::Collector;
+/// use saucers::options::AppOptions;
+/// use saucers::prefs::Preferences;
+/// use saucers::webview::Webview;
+///
+/// let cc = Collector::new();
+/// let app = App::new(&cc, AppOptions::new("app_id"));
+/// let w = Webview::new(&Preferences::new(&app));
+///
+/// // Wait, this drops the handle bound to `app`, but not the one stored in the webview!
+/// drop(app);
+///
+/// // Oh, no! The app is not fully dropped yet as the webview is still holding it!
+/// // The call below will panic:
+/// drop(cc);
+/// ```
+///
+/// This is especially crucial for calling [`crate::collector::Collector::collect_now`], as a deadlock can be easily
+/// formed if extra care is not taken:
+///
+/// ```no_run
+/// use saucers::app::App;
+/// use saucers::collector::Collector;
+/// use saucers::options::AppOptions;
+/// use saucers::prefs::Preferences;
+/// use saucers::webview::Webview;
+///
+/// let cc = Collector::new();
+/// let app = App::new(&cc, AppOptions::new("app_id"));
+/// let w = Webview::new(&Preferences::new(&app));
+///
+/// // Like above, there is still another app handle in the webview
+/// drop(app);
+///
+/// // Oh, no! The collector waits for the webview to get dropped, which happens after this!
+/// // The following call will form a deadlock and never return:
+/// cc.collect_now();
+///
+/// // Only at here can the last handle of the app get dropped, but it can't be reached
+/// // drop(w);
+/// ```
 #[derive(Clone)]
 pub struct Webview(pub(crate) Arc<RwLock<UnsafeWebview>>);
 
 impl Webview {
+    /// Creates a new webview window using the given [`Preferences`].
+    ///
+    /// This method must be called on the event thread of the [`App`] referenced by the [`Preferences`], or it is a
+    /// no-op and [`None`] is returned.
+    ///
+    /// The newly created webview handle stores a clone of the app handle internally. This can cause issues with
+    /// dropping. See [`Webview`] for details.
     pub fn new(pref: &Preferences) -> Option<Self> { Some(Webview(Arc::new(RwLock::new(UnsafeWebview::new(pref)?)))) }
 
-    /// Sets a handler for messages from the webview context.
+    /// Sets a handler for messages from the webview context. Only one handler can be set at a time. Setting a new one
+    /// will replace the previous one. This method must be called on the event thread.
     ///
-    /// Only one handler can be set. Setting a new one replaces the previous one.
+    /// The provided closure is dropped when being replaced, or removed via [`Self::off_message`]. If it's the last
+    /// active message handler when the webview is destroyed, it's dropped at least not later than the
+    /// [`crate::collector::Collector`] referenced by the app of this webview.
     ///
-    /// This method must be called on the event thread, or it does nothing.
+    /// # Don't Capture Handles
+    ///
+    /// Like [`App::post`], capturing any handles in the message handler may result in circular references and prevent
+    /// them from being dropped correctly. Either use the passed argument directly without capturing, or consider
+    /// wrapping them with [`Weak`] if other handles are needed. Alternatively, use [`Self::off_message`] to remove the
+    /// handler manually.
+    ///
+    /// # Panics
+    ///
+    /// Panics if not called on the event thread.
     pub fn on_message(&self, fun: impl FnMut(Webview, &str) -> bool + 'static) {
         self.0.write().unwrap().replace_message_handler(self.downgrade(), fun);
     }
 
-    /// Removes the message handler, if any.
+    /// Removes the previously set message handler, if any.
     ///
     /// This method must be called on the event thread, or it does nothing.
     pub fn off_message(&self) { self.0.write().unwrap().remove_message_handler(); }
 
+    /// Gets the current title of the HTML page in the webview window. Not to be confused with the window title.
     pub fn page_title(&self) -> String { ctor!(free, saucer_webview_page_title(self.as_ptr())) }
+
+    /// Checks whether DevTools is opened.
     pub fn dev_tools(&self) -> bool { unsafe { saucer_webview_dev_tools(self.as_ptr()) } }
+
+    /// Gets the URL of the current page.
     pub fn url(&self) -> String { ctor!(free, saucer_webview_url(self.as_ptr())) }
+
+    /// Gets whether context menu is now enabled.
     pub fn context_menu(&self) -> bool { unsafe { saucer_webview_context_menu(self.as_ptr()) } }
+
+    /// Gets the background color.
     pub fn background(&self) -> (u8, u8, u8, u8) {
         let mut r = 0u8;
         let mut g = 0u8;
@@ -270,45 +376,128 @@ impl Webview {
         }
         (r, g, b, a)
     }
+
+    /// Checks whether dark mode is being enforced now.
     pub fn force_dark_mode(&self) -> bool { unsafe { saucer_webview_force_dark_mode(self.as_ptr()) } }
 
+    /// Sets whether the DevTools is opened.
     pub fn set_dev_tools(&self, enabled: bool) { unsafe { saucer_webview_set_dev_tools(self.as_ptr(), enabled) } }
+
+    /// Sets whether the context menu is enabled.
     pub fn set_context_menu(&self, enabled: bool) { unsafe { saucer_webview_set_context_menu(self.as_ptr(), enabled) } }
+
+    /// Sets whether to enforce dark mode to be enabled.
     pub fn set_force_dark_mode(&self, enabled: bool) {
         unsafe { saucer_webview_set_force_dark_mode(self.as_ptr(), enabled) }
     }
+
+    /// Sets the background color.
     pub fn set_background(&self, r: u8, g: u8, b: u8, a: u8) {
         unsafe { saucer_webview_set_background(self.as_ptr(), r, g, b, a) }
     }
+
+    /// Converts the given path to a `file://` URL, then navigates to it.
     pub fn set_file(&self, file: impl AsRef<str>) {
         rtoc!(file => s ; saucer_webview_set_file(self.as_ptr(), s.as_ptr()));
     }
+
+    /// Navigates to the given URL.
     pub fn set_url(&self, url: impl AsRef<str>) { rtoc!(url => s; saucer_webview_set_url(self.as_ptr(), s.as_ptr())) }
 
+    /// Navigates back.
     pub fn back(&self) { unsafe { saucer_webview_back(self.as_ptr()) } }
+
+    /// Navigates forward.
     pub fn forward(&self) { unsafe { saucer_webview_forward(self.as_ptr()) } }
+
+    /// Reloads the current page.
     pub fn reload(&self) { unsafe { saucer_webview_reload(self.as_ptr()) } }
 
-    pub fn embed_file(&self, name: impl AsRef<str>, file: &EmbedFile, do_async: bool) {
-        let launch = if do_async {
+    /// A quick way of making an [`EmbedFile`] accessible in the web content.
+    ///
+    /// This method updates an internal scheme handler to return the content of `file` when a URL associated with `name`
+    /// is being requested. For now, the URL is `saucer://embedded/{name}`, but this pattern is not documented and
+    /// should not be relied on.
+    ///
+    /// This method is designed for embedding static content. Once a file is embedded, subsequent calls to this method
+    /// with the same name will not change the content. To embed dynamic content, use [`Self::handle_scheme`] instead.
+    ///
+    /// The `is_async` flag sets the launch policy of the internal scheme handler. The launch policy is fixed and can't
+    /// be changed after the first call to [`Self::embed_file`], until [`Self::clear_embedded`] is called.
+    pub fn embed_file(&self, name: impl AsRef<str>, file: &EmbedFile, is_async: bool) {
+        let launch = if is_async {
             SAUCER_LAUNCH_SAUCER_LAUNCH_ASYNC
         } else {
             SAUCER_LAUNCH_SAUCER_LAUNCH_SYNC
         };
         rtoc!(
             name => n;
-            saucer_webview_embed_file(self.as_ptr(), n.as_ptr(), file.as_ptr(), launch) // Data copied internally in C
+            // The embedded file and its stash are copied, so both handles are free to be dropped, as long as the data
+            // lives for static lifetime.
+            saucer_webview_embed_file(self.as_ptr(), n.as_ptr(), file.as_ptr(), launch)
         );
     }
 
-    pub fn serve(&self, file: impl AsRef<str>) { rtoc!(file => s; saucer_webview_serve(self.as_ptr(), s.as_ptr())) }
+    /// Navigates to the URL of a previously embedded file named `name`.
+    ///
+    /// This method sets the URL to `saucer://embedded/{name}` for now, but the exact pattern of the URL is subject to
+    /// change. See[`Self::embed_file`] for details.
+    pub fn serve(&self, name: impl AsRef<str>) { rtoc!(name => s; saucer_webview_serve(self.as_ptr(), s.as_ptr())) }
 
+    /// Removes all injected scripts except those marked as permanent.
     pub fn clear_scripts(&self) { unsafe { saucer_webview_clear_scripts(self.as_ptr()) } }
+
+    /// Removes all embedded files and unregisters the internal scheme handler.
+    ///
+    /// In particular, this method is not functionally equivalent to calling [`Self::clear_embedded_file`] for each
+    /// embedded file. Apart from clearing them, this method also removes the internal scheme handler, making the launch
+    /// policy (specified by `is_async`) of the next [`Self::embed_file`] to have effect.
     pub fn clear_embedded(&self) { unsafe { saucer_webview_clear_embedded(self.as_ptr()) } }
 
+    /// Removes a previously embedded file named `name`.
+    pub fn clear_embedded_file(&self, name: impl AsRef<str>) {
+        rtoc!(name => s; saucer_webview_clear_embedded_file(self.as_ptr(), s.as_ptr()))
+    }
+
+    /// Schedules a script to be executed when a document is loaded. The load time and injected frames are controlled by
+    /// the script object. The script is executed in the main script world.
+    ///
+    /// Injecting arbitrary script can cause **SEVERE SECURITY RISK**! Make sure to read the docs of [`Script`] to
+    /// understand the features and limitations of injected scripts before start using this method.
+    ///
+    /// Once injected, a script will stay attached to the webview until it's cleared via [`Self::clear_scripts`]. If
+    /// a script is defined as permanent, then there is no way to remove it.
+    ///
+    /// The script code is copied before attached for each invocation, making transferring large payload inefficient.
+    /// Consider other methods for such use cases.
     pub fn inject(&self, script: &Script) { unsafe { saucer_webview_inject(self.as_ptr(), script.as_ptr()) } }
+
+    /// Executes the given code in the main script world. Returns immediately without waiting.
+    ///
+    /// This method executes the code without any sanitizing, making it have the same security concerns as
+    /// [`Self::inject`] and [`Script`]. In short, executing arbitrary code is of **SEVERE RISK**! See the docs above
+    /// for details.
     pub fn execute(&self, code: impl AsRef<str>) { rtoc!(code => s; saucer_webview_execute(self.as_ptr(), s.as_ptr())) }
 
+    /// Sets a scheme handler for the scheme named `name`. The scheme handler will be executed entirely on the event
+    /// thread. As this method can only be called on the event thread too, it eliminated the [`Send`] bound of the
+    /// handler in [`Self::handle_scheme_async`].
+    ///
+    /// A scheme must first be registered using [`crate::scheme::register_scheme`] before it can be handled. Only one
+    /// scheme handler can be set for a given scheme name. Setting a new handler will replace the previous one.
+    ///
+    /// Like [`Self::on_message`], the provided closure is dropped when being replaced, or removed via
+    /// [`Self::remove_scheme`]. If it's the last active handler of a scheme when the webview is destroyed, it's dropped
+    /// at least not later than the [`crate::collector::Collector`] referenced by the app of this webview.
+    ///
+    /// # Don't Capture Handles
+    ///
+    /// Like [`Self::on_message`], capturing handles in handlers added by this method may interfere the correct
+    /// dropping behavior and should be avoided. See the docs there for details.
+    ///
+    /// # Panics
+    ///
+    /// Panics if not called on the event thread.
     pub fn handle_scheme(&self, name: impl AsRef<str>, fun: impl FnMut(Webview, Request, Executor) + 'static) {
         self.0
             .write()
@@ -316,6 +505,13 @@ impl Webview {
             .replace_scheme_handler(self.downgrade(), name, fun, false);
     }
 
+    /// Like [`Self::handle_scheme`], but executes the scheme handler in the background thread pool.
+    ///
+    /// Limitations and caveats of [`Self::handle_scheme`] also apply to this method. Make sure to check the docs there.
+    ///
+    /// # Panics
+    ///
+    /// Panics if not called on the event thread.
     pub fn handle_scheme_async(
         &self,
         name: impl AsRef<str>,
@@ -327,17 +523,42 @@ impl Webview {
             .replace_scheme_handler(self.downgrade(), name, fun, true);
     }
 
+    /// Removes the current handler of the scheme named `name`, if any.
+    ///
+    /// Removing a handler does not unregister the scheme. Another handler can be set for the scheme later and  function
+    /// properly.
+    ///
+    /// This method must be called on the event thread, or it does nothing.
+    pub fn remove_scheme(&self, name: impl AsRef<str>) { self.0.write().unwrap().remove_scheme_handler(name) }
+
+    /// Checks whether the window is visible. Not to be confused with [`Self::minimized`].
     pub fn visible(&self) -> bool { unsafe { saucer_window_visible(self.as_ptr()) } }
+
+    /// Checks whether the window is focused.
     pub fn focused(&self) -> bool { unsafe { saucer_window_focused(self.as_ptr()) } }
+
+    /// Checks whether the window is minimized.
     pub fn minimized(&self) -> bool { unsafe { saucer_window_minimized(self.as_ptr()) } }
+
+    /// Checks whether the window is maximized.
     pub fn maximized(&self) -> bool { unsafe { saucer_window_maximized(self.as_ptr()) } }
+
+    /// Checks whether the window is resizable.
     pub fn resizable(&self) -> bool { unsafe { saucer_window_resizable(self.as_ptr()) } }
+
+    /// Checks whether the window has decorations (i.e. not frameless).
     pub fn decorations(&self) -> bool { unsafe { saucer_window_decorations(self.as_ptr()) } }
+
+    /// Checks whether the window is set to be always on the top.
     pub fn always_on_top(&self) -> bool { unsafe { saucer_window_always_on_top(self.as_ptr()) } }
+
+    /// Checks whether the window can be clicked through.
     pub fn click_through(&self) -> bool { unsafe { saucer_window_click_through(self.as_ptr()) } }
 
+    /// Gets the title of the window.
     pub fn title(&self) -> String { ctor!(free, saucer_window_title(self.as_ptr())) }
 
+    /// Gets the size of the window.
     pub fn size(&self) -> (i32, i32) {
         let mut w = 0;
         let mut h = 0;
@@ -347,6 +568,7 @@ impl Webview {
         (w, h)
     }
 
+    /// Gets the maximum size of the window.
     pub fn max_size(&self) -> (i32, i32) {
         let mut w = 0;
         let mut h = 0;
@@ -356,6 +578,7 @@ impl Webview {
         (w, h)
     }
 
+    /// Gets the minimum size of the window.
     pub fn min_size(&self) -> (i32, i32) {
         let mut w = 0;
         let mut h = 0;
@@ -365,26 +588,70 @@ impl Webview {
         (w, h)
     }
 
+    /// Hides the window.
     pub fn hide(&self) { unsafe { saucer_window_hide(self.as_ptr()) } }
+
+    /// Show the window.
     pub fn show(&self) { unsafe { saucer_window_show(self.as_ptr()) } }
+
+    /// Closes the window. Not to be confused with [`Self::hide`]. Once a window is closed, it's essentially destroyed
+    /// and cannot be reopened.
+    ///
+    /// When the last webview window of an [`App`] is closed (even not dropped), either by this method or by user
+    /// actions, an implicit quit message is dispatched on the event thread as if [`App::quit`] were called, making the
+    /// event loop terminate. To prevent such behavior, either create a hidden empty webview window, or replace the
+    /// closing behavior with hiding. See [`crate::webview::events::CloseEvent`] for details.
     pub fn close(&self) { unsafe { saucer_window_close(self.as_ptr()) } }
+
+    /// Focuses the window.
     pub fn focus(&self) { unsafe { saucer_window_focus(self.as_ptr()) } }
 
+    /// Sets whether the window is minimized.
     pub fn set_minimized(&self, b: bool) { unsafe { saucer_window_set_minimized(self.as_ptr(), b) } }
+
+    /// Sets whether the window is maximized.
     pub fn set_maximized(&self, b: bool) { unsafe { saucer_window_set_maximized(self.as_ptr(), b) } }
+
+    /// Sets whether the window is resizable.
     pub fn set_resizable(&self, b: bool) { unsafe { saucer_window_set_resizable(self.as_ptr(), b) } }
+
+    /// Sets whether the window has decorations (frame).
     pub fn set_decorations(&self, b: bool) { unsafe { saucer_window_set_decorations(self.as_ptr(), b) } }
+
+    /// Sets whether the window is always on the top.
     pub fn set_always_on_top(&self, b: bool) { unsafe { saucer_window_set_always_on_top(self.as_ptr(), b) } }
+
+    /// Sets whether the window can be clicked through.
     pub fn set_click_through(&self, b: bool) { unsafe { saucer_window_set_click_through(self.as_ptr(), b) } }
 
+    /// Sets the window title.
     pub fn set_title(&self, title: impl AsRef<str>) {
         rtoc!(title => s; saucer_window_set_title(self.as_ptr(), s.as_ptr()))
     }
 
+    /// Sets the window size.
     pub fn set_size(&self, w: i32, h: i32) { unsafe { saucer_window_set_size(self.as_ptr(), w, h) } }
+
+    /// Sets the maximum size of the window.
     pub fn set_max_size(&self, w: i32, h: i32) { unsafe { saucer_window_set_max_size(self.as_ptr(), w, h) } }
+
+    /// Sets the minimum size of the window.
     pub fn set_min_size(&self, w: i32, h: i32) { unsafe { saucer_window_set_min_size(self.as_ptr(), w, h) } }
 
+    /// Like [`App::post`], but adds the webview handle as the second argument to eliminate the need of manual
+    /// capturing.
+    ///
+    /// Limitations and caveats of [`App::post`] also apply to this method. See the docs there for details.
+    pub fn post(&self, fun: impl FnOnce(App, Webview) + Send + 'static) {
+        let wk = self.downgrade();
+        self.0.read().unwrap().app.post(move |a| {
+            if let Some(w) = wk.upgrade() {
+                fun(a, w)
+            }
+        });
+    }
+
+    /// Clones a handle of the [`App`] referenced by this webview window.
     pub fn app(&self) -> App { self.0.read().unwrap().app.clone() }
 
     pub(crate) fn as_ptr(&self) -> *mut saucer_handle { self.0.read().unwrap().as_ptr() }

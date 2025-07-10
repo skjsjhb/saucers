@@ -50,7 +50,14 @@ fn do_app_test() {
 
     app.run();
 
-    assert_eq!(Arc::strong_count(&arc), 1, "Posted closures should be dropped");
+    // Posted closure are usually cleared by the event loop. What if there isn't an event loop?
+    // We can rely on the internal cleanup table for it.
+    app.post({
+        let arc = arc.clone();
+        move |_| {
+            let _ = &arc;
+        }
+    });
 
     // Tests a foreign drop, `Collector` will panic if this failed to be dropped.
     std::thread::spawn(move || {
@@ -58,4 +65,7 @@ fn do_app_test() {
     })
     .join()
     .unwrap();
+
+    drop(cc);
+    assert_eq!(Arc::strong_count(&arc), 1, "Posted closures should be dropped");
 }
