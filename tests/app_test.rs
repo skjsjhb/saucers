@@ -23,7 +23,7 @@ fn do_app_test() {
     let (tx, rx) = std::sync::mpsc::channel();
     let arc = Arc::new(());
     let arc1 = arc.clone();
-
+    #[allow(deprecated)]
     app.pool_submit(move || {
         assert!(!app2.is_thread_safe(), "Submitted tasks should run on new threads");
         tx.send(()).unwrap()
@@ -32,6 +32,7 @@ fn do_app_test() {
     assert!(rx.try_recv().is_ok(), "Submitting a task should wait for it to finish");
 
     let app3 = app.clone();
+    #[allow(deprecated)]
     app.pool_emplace(move || {
         app3.post(move |app| {
             assert!(app.is_thread_safe(), "Posted tasks should run on event thread");
