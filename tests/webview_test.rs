@@ -3,7 +3,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use saucers::app::App;
-use saucers::collector::Collector;
 use saucers::options::AppOptions;
 use saucers::prefs::Preferences;
 use saucers::scheme::register_scheme;
@@ -24,8 +23,7 @@ fn webview_test() { do_webview_test(); }
 fn do_webview_test() {
     register_scheme("foo");
 
-    let cc = Collector::new();
-    let app = App::new(&cc, AppOptions::new("saucer"));
+    let (app, cc) = App::new(AppOptions::new("saucer"));
     let w = Webview::new(&Preferences::new(&app)).unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
     let arc = Arc::new(());

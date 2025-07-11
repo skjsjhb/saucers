@@ -3,15 +3,13 @@ extern crate core;
 use std::sync::Arc;
 
 use saucers::app::App;
-use saucers::collector::Collector;
 use saucers::options::AppOptions;
 
 #[test]
 fn app_test() { do_app_test(); }
 
 fn do_app_test() {
-    let cc = Collector::new();
-    let app = App::new(&cc, AppOptions::new("saucer"));
+    let (app, cc) = App::new(AppOptions::new("saucer"));
 
     // Check for use-after-free.
     // Memory error shall occur if called `run_once` with an invalid pointer.

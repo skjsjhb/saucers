@@ -44,7 +44,6 @@ The most updated example is in [`src/main.rs`](src/main.rs):
 
 ```rust
 use saucers::app::App;
-use saucers::collector::Collector;
 use saucers::options::AppOptions;
 use saucers::prefs::Preferences;
 use saucers::webview::events::DomReadyEvent;
@@ -52,13 +51,10 @@ use saucers::webview::events::FaviconEvent;
 use saucers::webview::Webview;
 
 fn main() {
-    // Create a collector to help freeing up resources.
-    // The collector must be kept to live longer than all `App`s and `Webview`s.
-    // It detects leaks internally and gives a panic when dropped incorrectly.
-    let cc = Collector::new();
-
     // Create an app to manage the event cycle.
-    let app = App::new(&cc, AppOptions::new("saucer"));
+    // The app returns a collector which must be kept to live longer than all `App`s and `Webview`s.
+    // It detects leaks internally and gives a panic when dropped incorrectly.
+    let (app, cc) = App::new(AppOptions::new("saucer"));
 
     // Customize webview behavior using a preference set.
     let mut prefs = Preferences::new(&app);

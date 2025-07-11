@@ -120,7 +120,7 @@ impl UnsafeApp {
 /// sharable among threads, but certain features are restricted to the event thread, see method docs for details.
 ///
 /// App handles are clonable, but cloning a handle does not clone the underlying event loop. A new app must be created
-/// using the [`App::new`] constructor. Similarly, dropping an app handle does not destroy the app, unless it's the
+/// using the [`App::create`] constructor. Similarly, dropping an app handle does not destroy the app, unless it's the
 /// last handle present in the process.
 ///
 /// Capturing an app handle in various handlers can lead to circular references easily and will block the underlying
@@ -142,8 +142,18 @@ impl App {
     ///
     /// Like most GUI applications, the application event loop can only be run on the first thread of the process, thus
     /// the [`App`] and its [`Collector`] must also be created on this thread.
-    pub fn new(collector: &Collector, opt: AppOptions) -> Self {
+    pub fn create(collector: &Collector, opt: AppOptions) -> Self {
         Self(Arc::new(UnsafeApp::new(collector.get_inner(), opt)))
+    }
+
+    /// Like [`Self::create`], but creates a [`Collector`] internally and returns it with the created app.
+    ///
+    /// Usages of the returned collector should follow the same rules as one would use a separated collector. See the
+    /// docs there for details.
+    pub fn new(opt: AppOptions) -> (Self, Collector) {
+        let cc = Collector::new();
+        let s = Self::create(&cc, opt);
+        (s, cc)
     }
 
     /// Schedules the closure to be called on the event thread if applicable. The closure is scheduled to be processed
@@ -177,8 +187,7 @@ impl App {
     /// use saucers::app::App;
     /// use saucers::collector::Collector;
     /// use saucers::options::AppOptions;
-    /// let cc = Collector::new();
-    /// let app = App::new(&cc, AppOptions::new("saucer"));
+    /// let (app, cc) = App::new(AppOptions::new("saucer"));
     ///
     /// let _ = std::thread::spawn({
     ///     let app = app.clone();

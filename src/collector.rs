@@ -91,7 +91,7 @@ pub(crate) trait Collect: Send + Sync {
 /// use saucers::options::AppOptions;
 /// fn main() {
 ///     let cc = Collector::new();
-///     let app = App::new(&cc, AppOptions::new("app_id"));
+///     let app = App::create(&cc, AppOptions::new("app_id"));
 ///
 ///     // The following happens implicitly:
 ///     // drop(app);
@@ -109,7 +109,7 @@ pub(crate) trait Collect: Send + Sync {
 ///
 /// fn main() {
 ///     let cc = Collector::new();
-///     let app = App::new(&cc, AppOptions::new("app_id"));
+///     let app = App::create(&cc, AppOptions::new("app_id"));
 ///
 ///     std::thread::spawn(move || {
 ///         let _ = &app;
@@ -130,7 +130,7 @@ pub(crate) trait Collect: Send + Sync {
 ///
 /// fn main() {
 ///     let cc = Collector::new();
-///     let app = App::new(&cc, AppOptions::new("app_id"));
+///     let app = App::create(&cc, AppOptions::new("app_id"));
 ///
 ///     let th = std::thread::spawn(move || {
 ///         let _ = &app;
@@ -173,7 +173,7 @@ impl Collector {
     ///
     /// fn main() {
     ///     let cc = Collector::new();
-    ///     let app = App::new(&cc, AppOptions::new("app_id"));
+    ///     let app = App::create(&cc, AppOptions::new("app_id"));
     ///
     ///     std::thread::spawn(move || {
     ///         let _ = &app;
