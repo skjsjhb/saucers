@@ -1,6 +1,8 @@
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::mpmc::Sender;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -20,7 +22,6 @@ unsafe impl Sync for ReplaceableAppPtr {}
 
 struct AppPtr {
     ptr: Arc<ReplaceableAppPtr>,
-    posted_closures: RwLock<Vec<*mut Option<Box<dyn FnOnce()>>>>,
     _owns: PhantomData<saucer_application>,
     _counter: Arc<()>
 }
@@ -35,16 +36,9 @@ impl AppPtr {
 impl Collect for AppPtr {
     fn collect(self: Box<Self>) {
         unsafe {
-            let posted = self.posted_closures.write().unwrap();
-
-            for cls in &*posted {
-                drop(Box::from_raw(*cls));
-            }
-
-            drop(posted);
-
             let mut guard = self.ptr.0.write().unwrap();
             if let Some(ref ptr) = guard.take() {
+                // Some posted function may be run during the destruction process.
                 saucer_application_free(ptr.as_ptr())
             }
         }
@@ -55,6 +49,7 @@ struct UnsafeApp {
     ptr: Option<AppPtr>,
     collector: Option<Weak<UnsafeCollector>>,
     collector_tx: Sender<Box<dyn Collect>>,
+    stopped: AtomicBool,
     host_thread: ThreadId,
     _opt: AppOptions
 }
@@ -68,23 +63,11 @@ impl Drop for UnsafeApp {
             return;
         }
 
-        let ptr = bb.ptr.clone();
         self.collector_tx.send(bb).unwrap();
-        let wk = self.collector.take().unwrap();
 
-        // It's possible that the collector free the pointer before posting, so a read lock is required.
-        // The dropping process acquires a write lock, so if the `ptr` is `Some`, it must be valid.
-        let guard = ptr.0.read().unwrap();
-        if let Some(ref ptr) = *guard {
-            Self::post_raw(ptr.as_ptr(), move || {
-                // On some platform (e.g. GTK), the posted closure may still be executed even when the event loop has
-                // already stopped, and the app has been dropped (so does the collector). At the time the closure is
-                // being called, it's possible that the collector is no longer available.
-                if let Some(cc) = wk.upgrade() {
-                    cc.try_collect();
-                }
-            });
-        }
+        // When dropping an app, it's pointless to notify the collector as the event loop has terminated. The handle
+        // will be freed when the collector is dropped, which should happen shortly after the termination of the event
+        // loop for a regular application.
     }
 }
 
@@ -95,7 +78,6 @@ impl UnsafeApp {
             ptr: Arc::new(ReplaceableAppPtr(RwLock::new(Some(
                 NonNull::new(ptr).expect("Failed to create app")
             )))),
-            posted_closures: RwLock::new(Vec::new()),
             _owns: PhantomData,
             _counter: collector.count()
         };
@@ -104,6 +86,7 @@ impl UnsafeApp {
             ptr: Some(ptr),
             collector: Some(Arc::downgrade(&collector)),
             collector_tx: collector.get_sender(),
+            stopped: AtomicBool::new(false),
             host_thread: std::thread::current().id(),
             _opt: opt
         }
@@ -113,13 +96,11 @@ impl UnsafeApp {
 
     fn as_ptr(&self) -> *mut saucer_application { self.ptr.as_ref().unwrap().as_ptr() }
 
-    fn post_raw(ptr: *mut saucer_application, fun: impl FnOnce() + Send + 'static) {
-        let bb = Box::new(fun) as Box<dyn FnOnce()>;
-        let cpt = Box::into_raw(Box::new(bb)) as *mut c_void;
-        unsafe { saucer_application_post_with_arg(ptr, Some(post_trampoline), cpt) }
-    }
-
     fn post(&self, ar: AppRef, fun: impl FnOnce(App) + Send + 'static) {
+        if self.stopped.load(Ordering::SeqCst) {
+            return;
+        }
+
         let fna = move || {
             if let Some(a) = ar.upgrade() {
                 fun(a);
@@ -127,27 +108,9 @@ impl UnsafeApp {
         };
 
         let bb = Box::new(fna) as Box<dyn FnOnce()>;
-        let cpt = Box::into_raw(Box::new(Some(bb)));
-
-        self.save_closure_for_cleanup(cpt);
+        let cpt = Box::into_raw(Box::new(bb));
 
         unsafe { saucer_application_post_with_arg(self.as_ptr(), Some(post_trampoline), cpt as *mut c_void) }
-    }
-
-    fn save_closure_for_cleanup(&self, cls: *mut Option<Box<dyn FnOnce()>>) {
-        let mut guard = self.ptr.as_ref().unwrap().posted_closures.write().unwrap();
-        guard.push(cls);
-
-        guard.retain(|ptr| unsafe {
-            let b = Box::from_raw(*ptr);
-
-            if b.is_some() {
-                let _ = Box::into_raw(b);
-                true
-            } else {
-                false
-            }
-        });
     }
 }
 
@@ -183,20 +146,23 @@ impl App {
         Self(Arc::new(UnsafeApp::new(collector.get_inner(), opt)))
     }
 
-    /// Schedules the closure to be called on the event thread. The closure is scheduled to be processed after all other
-    /// event messages (e.g. window events) that has been scheduled before calling this method.
+    /// Schedules the closure to be called on the event thread if applicable. The closure is scheduled to be processed
+    /// after all other event messages (e.g. window events) that has been scheduled before calling this method.
     ///
-    /// This method is useful for executing certain operations that must happen on the event thread. Saucer internally
-    /// uses posting to make many methods usable outside the event thread. However, this method makes no guarantee on
-    /// when the closure will be executed, or even whether it will end up being executed. Critical operations may not
-    /// rely on the assumption of the execution time of the posted closure.
+    /// The app will decide whether a closure can be accepted. It simply ignores the call if it believes that the event
+    /// loop does not seem likely to start again, e.g. after a successful return from [`Self::run`]. If a closure is
+    /// accepted, the app tries the best effort to run it, but still makes no guarantee on when the closure will be
+    /// executed, or even whether it will end up being executed. Critical operations should not rely on the assumption
+    /// of the execution time of the posted closure.
+    ///
+    /// Once a closure is accepted, it will be dropped once it finishes execution. If a closure is accepted but failed
+    /// to be scheduled, then its content is leaked. Chances of such cases are reduced to a minimum, but can't be
+    /// completely ruled out. Thus, one should not rely on the drop behavior of the posted closures.
     ///
     /// # Don't Capture Handles
     ///
-    /// The closure and the [`App`] handle passed to it will be dropped once it finishes execution. If the closure has
-    /// not been executed when the app is dropped, it's dropped at least not later than the [`Collector`] of the app is
-    /// dropped. However, capturing any handles in the closure, including [`App`] and other handles that rely on it, may
-    /// create circular references and block such drop from happening, thus it's **highly discouraged** to capture any
+    /// Capturing any handles in the closure, including [`App`] and other handles that rely on it, may create circular
+    /// references and block other handles from being dropped correctly. It's **highly discouraged** to capture any
     /// handles in the provided closure without using [`Weak`].
     ///
     /// # Performance Concerns
@@ -238,6 +204,10 @@ impl App {
     /// Once this method returns, further attempts to run the event loop may not behave consistently across platforms,
     /// see also [`Self::quit`].
     ///
+    /// The app stops accepting new [`Self::post`]ed closures once this method returns. If the platform supports
+    /// restarting the event loop, then new closures can only be accepted again after the next call to this method
+    /// happens.
+    ///
     /// # Panics
     ///
     /// Panics if not called on the event thread.
@@ -245,11 +215,24 @@ impl App {
         if !self.is_thread_safe() {
             panic!("Event loop must only be executed on the even thread.");
         }
+
+        self.0.stopped.store(false, Ordering::SeqCst);
+
         unsafe { saucer_application_run(self.as_ptr()) }
+
+        self.0.stopped.store(true, Ordering::SeqCst);
+
+        // Polls possible messages that's added during the quit process (e.g. posted closures).
+        // This should clean up all closures posted before the app ends.
+        self.run_once();
     }
 
     /// Polls and processes at most one event in the event queue. Makes no attempt to wait for one when the queue is
     /// empty.
+    ///
+    /// Unlike [`Self::run`], this method does not affect the status of accepting [`Self::post`]ed closures. Given that
+    /// it's non-blocking, this method should not be used as the way to run the app. Rather, it shall be considered as a
+    /// one-shot hint to clear the events.
     ///
     /// # Panics
     ///
@@ -325,11 +308,8 @@ impl AppRef {
 
 extern "C" fn post_trampoline(raw: *mut c_void) {
     unsafe {
-        let mut bb = Box::from_raw(raw as *mut Option<Box<dyn FnOnce()>>);
-        if let Some(f) = bb.take() {
-            f();
-        }
-        let _ = Box::into_raw(bb);
+        let bb = Box::from_raw(raw as *mut Box<dyn FnOnce()>);
+        bb();
     }
 }
 
