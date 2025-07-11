@@ -185,7 +185,6 @@ impl App {
     ///
     /// ```
     /// use saucers::app::App;
-    /// use saucers::collector::Collector;
     /// use saucers::options::AppOptions;
     /// let (app, cc) = App::new(AppOptions::new("saucer"));
     ///
