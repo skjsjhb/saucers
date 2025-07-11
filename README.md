@@ -85,7 +85,6 @@ fn main() {
     // This API forwards the message as-is, allowing more complex channels to be built on it.
     w.on_message(|_, msg| {
         println!("Browser: {msg}");
-        true
     });
 
     // Set several runtime properties for webview.

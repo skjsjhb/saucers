@@ -27,7 +27,7 @@ use crate::script::Script;
 pub(crate) struct WebviewPtr {
     ptr: NonNull<saucer_handle>,
     // Message handlers are only ever called on the event thread so `Rc` + `RefCell` is sufficient.
-    message_handler: Option<*mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, &str) -> bool>>>)>,
+    message_handler: Option<*mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, &str)>>>)>,
     // Unlike message handlers, scheme handlers may be called outside the event thread and must be locked.
     scheme_handlers: HashMap<String, *mut (WebviewRef, Arc<Mutex<Box<dyn FnMut(Webview, Request, Executor)>>>)>,
     _owns: PhantomData<saucer_handle>,
@@ -145,14 +145,14 @@ impl UnsafeWebview {
         }
     }
 
-    fn replace_message_handler(&mut self, wk: WebviewRef, fun: impl FnMut(Webview, &str) -> bool + 'static) {
+    fn replace_message_handler(&mut self, wk: WebviewRef, fun: impl FnMut(Webview, &str) + 'static) {
         if !self.app.is_thread_safe() {
             panic!("Message handlers cannot be altered outside the event thread.");
         }
 
         self.remove_message_handler();
 
-        let bb = Box::new(fun) as Box<dyn FnMut(Webview, &str) -> bool>;
+        let bb = Box::new(fun) as Box<dyn FnMut(Webview, &str)>;
         let rc = Rc::new(RefCell::new(bb));
         let pair = (wk, rc);
         let ptr = Box::into_raw(Box::new(pair));
@@ -205,12 +205,16 @@ impl UnsafeWebview {
 }
 
 extern "C" fn on_message_trampoline(msg: *const c_char, raw: *mut c_void) -> bool {
-    let bb = unsafe { Box::from_raw(raw as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, &str) -> bool>>>)) };
+    let bb = unsafe { Box::from_raw(raw as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, &str)>>>)) };
     let rc = (*bb).1.clone();
     if let Some(w) = bb.0.upgrade() {
         rc.borrow_mut()(w, &ctor!(msg));
     }
     let _ = Box::into_raw(bb); // Avoid dropping the handler
+
+    // The C bindings is loaded as a module.
+    // For other modules, returning false here allows the message to be passed on to the next module.
+    // We're on the main program and there isn't a module chained after this for handling, so simply return true here.
     true
 }
 
@@ -340,7 +344,7 @@ impl Webview {
     /// # Panics
     ///
     /// Panics if not called on the event thread.
-    pub fn on_message(&self, fun: impl FnMut(Webview, &str) -> bool + 'static) {
+    pub fn on_message(&self, fun: impl FnMut(Webview, &str) + 'static) {
         self.0.write().unwrap().replace_message_handler(self.downgrade(), fun);
     }
 

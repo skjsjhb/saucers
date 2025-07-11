@@ -154,11 +154,10 @@ fn do_webview_test() {
 
     w.on_message({
         let arc = arc.clone();
-        move |w, msg| -> bool {
+        move |w, msg| {
             let _ = &arc;
             assert_eq!(msg, "pong!", "Message content should be correct");
             w.close();
-            true
         }
     });
 
