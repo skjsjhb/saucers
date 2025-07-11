@@ -26,13 +26,20 @@ pub struct Script {
 
 /// Possible values of the time that a script is injected.
 pub enum ScriptLoadTime {
+    /// Executes the script when the document is created.
     Creation,
+    /// Executes the script when the DOM is ready.
+    ///
+    /// Scripts scheduled to be run at this stage may not be executed if default scripts are disabled. Try to use
+    /// JavaScript APIs instead.
     Ready
 }
 
 /// Possible values of the frame that a script is injected.
 pub enum ScriptWebFrame {
+    /// Executes the script only in the top frame.
     Top,
+    /// Executes the script in all frames.
     All
 }
 
@@ -85,6 +92,9 @@ impl Script {
     }
 
     /// Sets the time to inject the script.
+    ///
+    /// Scripts can be scheduled to run when DOM is ready, but such behavior relies on default scripts and may not
+    /// function when they are disabled. Consider using JavaScript APIs instead.
     pub fn set_time(&mut self, time: ScriptLoadTime) {
         unsafe { saucer_script_set_time(self.ptr.as_ptr(), time.into()) }
     }

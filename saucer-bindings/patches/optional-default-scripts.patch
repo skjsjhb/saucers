@@ -1,0 +1,82 @@
+diff --git a/include/saucer/window.hpp b/include/saucer/window.hpp
+index 6822a1e..1ceda96 100644
+--- a/include/saucer/window.hpp
++++ b/include/saucer/window.hpp
+@@ -53,6 +53,7 @@ namespace saucer
+       public:
+         bool persistent_cookies{true};
+         bool hardware_acceleration{true};
++        bool default_scripts{true};
+ 
+       public:
+         fs::path storage_path;
+diff --git a/src/qt.webview.cpp b/src/qt.webview.cpp
+index 9ecb5e8..aafa641 100644
+--- a/src/qt.webview.cpp
++++ b/src/qt.webview.cpp
+@@ -76,8 +76,11 @@ namespace saucer
+             set_dev_tools(false);
+         };
+ 
+-        inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
+-        inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
++        if (prefs.default_scripts)
++        {
++            inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
++            inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
++        }
+ 
+         m_impl->web_view->show();
+     }
+diff --git a/src/wk.webview.mm b/src/wk.webview.mm
+index 038b35d..0e4edf1 100644
+--- a/src/wk.webview.mm
++++ b/src/wk.webview.mm
+@@ -96,8 +96,11 @@ namespace saucer
+             set_dev_tools(false);
+         };
+ 
+-        inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
+-        inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
++        if (prefs.default_scripts)
++        {
++            inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
++            inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
++        }
+     }
+ 
+     webview::~webview()
+diff --git a/src/wkg.webview.cpp b/src/wkg.webview.cpp
+index 87a6448..ca27ee5 100644
+--- a/src/wkg.webview.cpp
++++ b/src/wkg.webview.cpp
+@@ -132,8 +132,11 @@ namespace saucer
+         g_signal_connect(controller, "pressed", G_CALLBACK(+on_click), this);
+         gtk_widget_add_controller(GTK_WIDGET(m_impl->web_view), GTK_EVENT_CONTROLLER(controller));
+ 
+-        inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
+-        inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
++        if (prefs.default_scripts)
++        {
++            inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
++            inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
++        }
+     }
+ 
+     webview::~webview()
+diff --git a/src/wv2.webview.cpp b/src/wv2.webview.cpp
+index bab9cf1..e7a316f 100644
+--- a/src/wv2.webview.cpp
++++ b/src/wv2.webview.cpp
+@@ -149,7 +149,10 @@ namespace saucer
+             settings->put_AreBrowserAcceleratorKeysEnabled(false);
+         }
+ 
+-        inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
++        if (prefs.default_scripts)
++        {
++            inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
++        }
+     }
+ 
+     webview::~webview()

@@ -18,6 +18,7 @@ extern "C"
 
     SAUCER_EXPORT void saucer_preferences_set_persistent_cookies(saucer_preferences *, bool enabled);
     SAUCER_EXPORT void saucer_preferences_set_hardware_acceleration(saucer_preferences *, bool enabled);
+    SAUCER_EXPORT void saucer_preferences_set_default_scripts(saucer_preferences *, bool enabled);
 
     SAUCER_EXPORT void saucer_preferences_set_storage_path(saucer_preferences *, const char *path);
     SAUCER_EXPORT void saucer_preferences_add_browser_flag(saucer_preferences *, const char *flag);

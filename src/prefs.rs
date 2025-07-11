@@ -53,6 +53,29 @@ impl<'a> Preferences<'a> {
         unsafe { saucer_preferences_set_hardware_acceleration(self.inner.as_ptr(), acc) }
     }
 
+    /// Sets whether default scripts are injected. Default scripts are enabled by default.
+    ///
+    /// Disabling default scripts allow the framework to provide more fine-grained APIs than the default injected
+    /// scripts. However, this will also disable certain built-in features:
+    ///
+    /// - All exposed JavaScript APIs under `window.saucer` won't be available, including messaging and exposed C++
+    ///   functions.
+    /// - [`crate::webview::events::DomReadyEvent`] won't be fired for Qt, WebKitGTK and Cocoa/WebKit.
+    /// - [`crate::script::Script`]s injected at [`crate::script::ScriptLoadTime::Ready`] stage won't be executed for
+    ///   Qt, WebKitGTK and Cocoa/WebKit.
+    /// - DOM elements cannot be used to interact with frameless window by adding data attributes.
+    /// - Other potentially undocumented features relying on the injected scripts.
+    ///
+    /// Such features can be re-implemented by the framework if needed.
+    ///
+    /// Once the default scripts are configured to be disabled for a webview, there is no way to re-enable them after
+    /// the creation.
+    ///
+    /// This method is not part of the saucer API and does not follow its semantic versioning.
+    pub fn set_default_scripts(&mut self, def: bool) {
+        unsafe { saucer_preferences_set_default_scripts(self.inner.as_ptr(), def) }
+    }
+
     /// Sets the path to store browser data.
     ///
     /// By default, saucer chooses a path either by computing a default value, or use implementation-defined defaults.
