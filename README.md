@@ -40,7 +40,8 @@ process.
 >
 > This project is still under development and the API is subject to change at any time.
 
-The most updated example is in [`src/main.rs`](src/main.rs):
+Examples can be found in the [`examples`](examples) directory. Additionally, for a one-file quick demonstration, see
+[`src/main.rs`](src/main.rs):
 
 ```rust
 use saucers::app::App;
