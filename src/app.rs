@@ -150,10 +150,10 @@ impl App {
     ///
     /// Usages of the returned collector should follow the same rules as one would use a separated collector. See the
     /// docs there for details.
-    pub fn new(opt: AppOptions) -> (Self, Collector) {
+    pub fn new(opt: AppOptions) -> (Collector, Self) {
         let cc = Collector::new();
         let s = Self::create(&cc, opt);
-        (s, cc)
+        (cc, s)
     }
 
     /// Schedules the closure to be called on the event thread if applicable. The closure is scheduled to be processed
@@ -186,7 +186,7 @@ impl App {
     /// ```
     /// use saucers::app::App;
     /// use saucers::options::AppOptions;
-    /// let (app, cc) = App::new(AppOptions::new("saucer"));
+    /// let (cc, app) = App::new(AppOptions::new("saucer"));
     ///
     /// let _ = std::thread::spawn({
     ///     let app = app.clone();

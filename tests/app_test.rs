@@ -9,7 +9,7 @@ use saucers::options::AppOptions;
 fn app_test() { do_app_test(); }
 
 fn do_app_test() {
-    let (app, cc) = App::new(AppOptions::new("saucer"));
+    let (cc, app) = App::new(AppOptions::new("saucer"));
 
     // Check for use-after-free.
     // Memory error shall occur if called `run_once` with an invalid pointer.

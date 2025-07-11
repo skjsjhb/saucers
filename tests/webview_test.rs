@@ -23,7 +23,7 @@ fn webview_test() { do_webview_test(); }
 fn do_webview_test() {
     register_scheme("foo");
 
-    let (app, cc) = App::new(AppOptions::new("saucer"));
+    let (cc, app) = App::new(AppOptions::new("saucer"));
     let w = Webview::new(&Preferences::new(&app)).unwrap();
     let (tx, rx) = std::sync::mpsc::channel();
     let arc = Arc::new(());

@@ -271,7 +271,7 @@ extern "C" fn scheme_trampoline(
 /// use saucers::prefs::Preferences;
 /// use saucers::webview::Webview;
 ///
-/// let (app, cc) = App::new(AppOptions::new("app_id"));
+/// let (cc, app) = App::new(AppOptions::new("app_id"));
 /// let w = Webview::new(&Preferences::new(&app));
 ///
 /// // Wait, this drops the handle bound to `app`, but not the one stored in the webview!
@@ -291,7 +291,7 @@ extern "C" fn scheme_trampoline(
 /// use saucers::prefs::Preferences;
 /// use saucers::webview::Webview;
 ///
-/// let (app, cc) = App::new(AppOptions::new("app_id"));
+/// let (cc, app) = App::new(AppOptions::new("app_id"));
 /// let w = Webview::new(&Preferences::new(&app));
 ///
 /// // Like above, there is still another app handle in the webview

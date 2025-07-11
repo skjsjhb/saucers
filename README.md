@@ -54,7 +54,7 @@ fn main() {
     // Create an app to manage the event cycle.
     // The app returns a collector which must be kept to live longer than all `App`s and `Webview`s.
     // It detects leaks internally and gives a panic when dropped incorrectly.
-    let (app, cc) = App::new(AppOptions::new("saucer"));
+    let (cc, app) = App::new(AppOptions::new("saucer"));
 
     // Customize webview behavior using a preference set.
     let mut prefs = Preferences::new(&app);
