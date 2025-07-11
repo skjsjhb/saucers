@@ -328,6 +328,12 @@ impl Webview {
     /// active message handler when the webview is destroyed, it's dropped at least not later than the
     /// [`crate::collector::Collector`] referenced by the app of this webview.
     ///
+    /// # Keep Message Content Unique
+    ///
+    /// Saucer internally uses the same message channel to send and receive certain internal events, e.g. `dom_loaded`
+    /// for triggering the [`crate::webview::events::DomReadyEvent`]. Allowing arbitrary messages to be sent over this
+    /// channel may accidentally trigger these handlers. Consider prefixing messages to avoid such conflicts.
+    ///
     /// # Don't Capture Handles
     ///
     /// Like [`App::post`], capturing any handles in the message handler may result in circular references and prevent
