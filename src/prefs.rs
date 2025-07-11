@@ -68,6 +68,9 @@ impl<'a> Preferences<'a> {
     ///
     /// Such features can be re-implemented by the framework if needed.
     ///
+    /// For Qt WebEngine, as the file `qwebchannel.js` needs to be injected for establishing a channel, it's always
+    /// injected regardless of this option.
+    ///
     /// Once the default scripts are configured to be disabled for a webview, there is no way to re-enable them after
     /// the creation.
     ///

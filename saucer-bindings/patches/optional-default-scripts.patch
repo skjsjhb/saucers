@@ -11,10 +11,38 @@ index 6822a1e..1ceda96 100644
        public:
          fs::path storage_path;
 diff --git a/src/qt.webview.cpp b/src/qt.webview.cpp
-index 9ecb5e8..aafa641 100644
+index 9ecb5e8..ac254c9 100644
 --- a/src/qt.webview.cpp
 +++ b/src/qt.webview.cpp
-@@ -76,8 +76,11 @@ namespace saucer
+@@ -7,11 +7,27 @@
+ #include <fmt/core.h>
+ #include <fmt/xchar.h>
+ 
++#include <QFile>
+ #include <QWebEngineScriptCollection>
+ #include <QWebEngineProfile>
+ #include <QWebEngineSettings>
+ #include <QWebEngineUrlScheme>
+ 
++static std::string load_qt_channel_script()
++{
++    QFile qwebchannel{":/qtwebchannel/qwebchannel.js"};
++
++    if (!qwebchannel.open(QIODevice::ReadOnly))
++    {
++        return "";
++    }
++
++    const auto content = qwebchannel.readAll().toStdString();
++    qwebchannel.close();
++
++    return content;
++}
++
+ namespace saucer
+ {
+     webview::webview(const preferences &prefs) : window(prefs), extensible(this), m_impl(std::make_unique<impl>())
+@@ -76,8 +92,15 @@ namespace saucer
              set_dev_tools(false);
          };
  
@@ -24,6 +52,10 @@ index 9ecb5e8..aafa641 100644
 +        {
 +            inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
 +            inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
++        }
++        else
++        {
++            inject({.code = load_qt_channel_script(), .time = load_time::creation, .permanent = true});
 +        }
  
          m_impl->web_view->show();
