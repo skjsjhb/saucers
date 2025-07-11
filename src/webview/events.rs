@@ -24,9 +24,9 @@ pub trait WebviewEvent {
 macro_rules! make_event {
     ($name:ident($($arg:ty),*) -> $rt:ty, $chn:ident, $tra:ident, $tro:ident, $reg:ident, $reo:ident, $rem:ident, $clear:ident, $offset:expr) => {
         // pub struct ${ concat($name, Event) };
-        impl WebviewEvent for ${ concat($name, Event) } {
-            type Handler = dyn FnMut(Webview $(,$arg)*) + 'static;
-            type OnceHandler = dyn FnOnce(Webview $(,$arg)*) + 'static;
+        impl WebviewEvent for $name {
+            type Handler = dyn (FnMut(Webview $(,$arg)*) -> $rt) + 'static;
+            type OnceHandler = dyn (FnOnce(Webview $(,$arg)*) -> $rt) + 'static;
 
             unsafe fn register(ptr: *mut saucer_handle, raw: *mut c_void) -> u64 {
                 unsafe {
@@ -54,12 +54,12 @@ macro_rules! make_event {
 }
 
 macro_rules! make_webview_event {
-    ($name:ident($($arg:ty),*) -> $rt:ty, $chn:ident, $tra:ident) => {
+    ($name:ident($($arg:ty),*) -> $rt:ty, $chn:ident, $tra:ident, $tro:ident) => {
         make_event!(
             $name($($arg),*) -> $rt,
-            $ { concat(SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_, $chn) },
-            $ { concat(on_, $tra, _trampoline) },
-            $ { concat(once_, $tra, _trampoline) },
+            $chn,
+            $tra,
+            $tro,
             saucer_webview_on_with_arg,
             saucer_webview_once_with_arg,
             saucer_webview_remove,
@@ -70,12 +70,12 @@ macro_rules! make_webview_event {
 }
 
 macro_rules! make_window_event {
-    ($name:ident($($arg:ty),*) -> $rt:ty, $chn:ident, $tra:ident) => {
+    ($name:ident($($arg:ty),*) -> $rt:ty, $chn:ident, $tra:ident, $tro:ident) => {
         make_event!(
             $name($($arg),*)  -> $rt,
-            $ { concat(SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_, $chn) },
-            $ { concat(on_, $tra, _trampoline) },
-            $ { concat(once_, $tra, _trampoline) },
+            $chn,
+            $tra,
+            $tro,
             saucer_window_on_with_arg,
             saucer_window_once_with_arg,
             saucer_window_remove,
@@ -84,9 +84,6 @@ macro_rules! make_window_event {
         );
     };
 }
-
-// Some editors seem unable to expand macros with `macro_metavar_expr_concat` correctly.
-// The event structs are extracted here for better DX.
 
 /// Fired when the DOM is ready.
 pub struct DomReadyEvent;
@@ -131,19 +128,21 @@ pub struct FocusEvent;
 /// Return `false` from the event handler to prevent it.
 pub struct CloseEvent;
 
-make_webview_event!(DomReady() -> (), DOM_READY, dom_ready);
-make_webview_event!(Navigate(WebviewNavigation) -> bool, NAVIGATE, navigate);
-make_webview_event!(Navigated(&str) -> (), NAVIGATED, navigated);
-make_webview_event!(Title(&str) -> (), TITLE, title);
-make_webview_event!(Favicon(Icon) -> (), FAVICON, favicon);
-make_webview_event!(Load(WebviewLoadState) -> (), LOAD, load);
-make_window_event!(Decorated(bool) -> (), DECORATED, decorated);
-make_window_event!(Maximize(bool) -> (), MAXIMIZE, maximize);
-make_window_event!(Minimize(bool) -> (), MINIMIZE, minimize);
-make_window_event!(Closed() -> (), CLOSED, closed);
-make_window_event!(Resize(i32, i32) -> (), RESIZE, resize);
-make_window_event!(Focus(bool) -> (), FOCUS, focus);
-make_window_event!(Close() -> bool, CLOSE, close);
+// Some editors seem unable to expand macros with `macro_metavar_expr_concat` correctly.
+// Use the full name can provide potentially better DX for users.
+make_webview_event!(DomReadyEvent() -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY, on_dom_ready_trampoline, once_dom_ready_trampoline);
+make_webview_event!(NavigateEvent(WebviewNavigation) -> bool, SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE, on_navigate_trampoline, once_navigate_trampoline);
+make_webview_event!(NavigatedEvent(&str) -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED, on_navigated_trampoline, once_navigated_trampoline);
+make_webview_event!(TitleEvent(&str) -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_trampoline, once_title_trampoline);
+make_webview_event!(FaviconEvent(Icon) -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON, on_favicon_trampoline, once_favicon_trampoline);
+make_webview_event!(LoadEvent(WebviewLoadState) -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD, on_load_trampoline, once_load_trampoline);
+make_window_event!(DecoratedEvent(bool) -> (), SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED, on_decorated_trampoline, once_decorated_trampoline);
+make_window_event!(MaximizeEvent(bool) -> (), SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE, on_maximize_trampoline, once_maximize_trampoline);
+make_window_event!(MinimizeEvent(bool) -> (), SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MINIMIZE, on_minimize_trampoline, once_minimize_trampoline);
+make_window_event!(ClosedEvent() -> (), SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSED, on_closed_trampoline, once_closed_trampoline);
+make_window_event!(ResizeEvent(i32, i32) -> (), SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_RESIZE, on_resize_trampoline, once_resize_trampoline);
+make_window_event!(FocusEvent(bool) -> (), SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_FOCUS, on_focus_trampoline, once_focus_trampoline);
+make_window_event!(CloseEvent() -> bool, SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_CLOSE, on_close_trampoline, once_close_trampoline);
 
 #[derive(Eq, PartialEq)]
 pub enum WebviewLoadState {
