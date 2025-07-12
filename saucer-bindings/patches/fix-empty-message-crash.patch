@@ -1,0 +1,20 @@
+diff --git a/src/wv2.webview.cpp b/src/wv2.webview.cpp
+index bab9cf1..8f78f97 100644
+--- a/src/wv2.webview.cpp
++++ b/src/wv2.webview.cpp
+@@ -44,7 +44,14 @@ namespace saucer
+             utils::string_handle raw;
+             args->TryGetWebMessageAsString(&raw.reset());
+ 
+-            auto message = utils::narrow(raw.get());
++            auto *str = raw.get();
++
++            if (str == nullptr)
++            {
++                return S_OK;
++            }
++
++            auto message = utils::narrow(str);
+             m_parent->post([this, message = std::move(message)] { on_message(message); });
+ 
+             return S_OK;

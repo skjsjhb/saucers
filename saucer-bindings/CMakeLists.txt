@@ -104,6 +104,7 @@ add_custom_command(
         COMMAND "${PATCH_COMMAND}" -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patches/fix-app-quit.patch"
         COMMAND "${PATCH_COMMAND}" -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patches/fix-request-body-crash.patch"
         COMMAND "${PATCH_COMMAND}" -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patches/optional-default-scripts.patch"
+        COMMAND "${PATCH_COMMAND}" -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patches/fix-empty-message-crash.patch"
         WORKING_DIRECTORY "${saucer_SOURCE_DIR}"
         COMMENT "Patching saucer sources..."
 )
