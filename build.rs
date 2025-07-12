@@ -5,7 +5,7 @@ fn main() {
     let profile = std::env::var("PROFILE").unwrap();
     let is_debug = profile == "debug" || profile == "test";
 
-    let build_static = std::env::var("CARGO_FEATURE_STATIC_LIB").is_ok() && os != "macos";
+    let build_static = std::env::var("CARGO_FEATURE_STATIC_LIB").is_ok();
     let crs_lto = std::env::var("CARGO_FEATURE_CROSS_LTO").is_ok() && build_static;
 
     let mut conf = cmake::Config::new("saucer-bindings");
@@ -29,14 +29,15 @@ fn main() {
 
     if crs_lto {
         if os == "windows" {
+            // MSVC version of clang-cl generates worse result and requires additional setup
+            // Ninja usually comes with cmake and is faster and easier to set these flags
             conf.generator("Ninja");
             conf.define("CMAKE_C_COMPILER", "clang-cl");
             conf.define("CMAKE_CXX_COMPILER", "clang-cl");
             conf.define("CMAKE_ASM_COMPILER", "clang-cl");
             conf.define("CMAKE_AR", "llvm-lib");
-        }
-
-        if os == "linux" {
+        } else {
+            // Enforce clang for both macOS and Linux
             conf.define("CMAKE_C_COMPILER", "clang");
             conf.define("CMAKE_CXX_COMPILER", "clang");
             conf.define("CMAKE_ASM_COMPILER", "clang");
@@ -71,6 +72,13 @@ fn main() {
             println!("cargo:rustc-link-lib=dylib=user32");
             println!("cargo:rustc-link-lib=dylib=advapi32");
             println!("cargo:rustc-link-lib=dylib=ole32");
+        }
+
+        if os == "macos" {
+            println!("cargo:rustc-link-lib=dylib=c++");
+            println!("cargo:rustc-link-lib=framework=Cocoa");
+            println!("cargo:rustc-link-lib=framework=WebKit");
+            println!("cargo:rustc-link-lib=framework=CoreImage");
         }
 
         if os == "linux" {
