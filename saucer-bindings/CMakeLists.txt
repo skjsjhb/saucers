@@ -85,7 +85,7 @@ include("cmake/cpm.cmake")
 
 CPMFindPackage(
         NAME saucer
-        VERSION 6.0.0
+        VERSION 6.0.1
         GIT_REPOSITORY "https://github.com/saucer/saucer"
         OPTIONS "saucer_static ON" "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON" "saucer_package_all ON"
 )
