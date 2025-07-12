@@ -22,11 +22,15 @@ extern "C"
 
     typedef saucer_stash *(*saucer_stash_lazy_callback)();
 
+    typedef saucer_stash *(*saucer_stash_lazy_callback_with_arg)(void *);
+
     /**
      * @note The stash returned from within the @param callback is automatically deleted. However, the stash returned
      * from this function must still be free'd accordingly.
      */
     SAUCER_EXPORT saucer_stash *saucer_stash_lazy(saucer_stash_lazy_callback callback);
+
+    SAUCER_EXPORT saucer_stash *saucer_stash_lazy_with_arg(saucer_stash_lazy_callback_with_arg callback, void *arg);
 
 #ifdef __cplusplus
 }

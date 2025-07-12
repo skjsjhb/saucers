@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::sync::mpmc::Receiver;
 use std::sync::mpmc::Sender;
-use std::sync::Arc;
 
 /// The sharable struct backing [`Collector`] with private access.
 ///

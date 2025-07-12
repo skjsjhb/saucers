@@ -1,21 +1,21 @@
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use saucers::app::App;
 use saucers::options::AppOptions;
 use saucers::prefs::Preferences;
-use saucers::scheme::register_scheme;
 use saucers::scheme::Response;
+use saucers::scheme::register_scheme;
 use saucers::script::Script;
 use saucers::script::ScriptLoadTime;
 use saucers::stash::Stash;
+use saucers::webview::Webview;
 use saucers::webview::events::ClosedEvent;
 use saucers::webview::events::DomReadyEvent;
 use saucers::webview::events::FaviconEvent;
 use saucers::webview::events::MinimizeEvent;
 use saucers::webview::events::TitleEvent;
-use saucers::webview::Webview;
 
 #[test]
 fn webview_test() { do_webview_test(); }
@@ -137,7 +137,7 @@ fn do_webview_test() {
         ScriptLoadTime::Ready
     ));
 
-    w.handle_scheme("foo", {
+    w.handle_scheme_async("foo", {
         let arc = arc.clone();
         move |_, req, exc| {
             let _ = &arc;
@@ -145,10 +145,12 @@ fn do_webview_test() {
             let body = String::from_utf8_lossy(st.data().unwrap());
             assert_eq!(req.method(), "POST", "Method of scheme request should be correct");
             assert_eq!(body, "ping!", "Body of scheme request should be correct");
-            let res = Response::new(&Stash::view("pong!".into()), "text/plain");
+
+            let st = Stash::lazy(|| Stash::view("pong!"));
+            let res = Response::new(&st, "text/plain");
 
             res.set_header("Access-Control-Allow-Origin", "*");
-            exc.resolve(&res);
+            exc.resolve(res);
         }
     });
 

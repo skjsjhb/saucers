@@ -1,4 +1,6 @@
+use std::ffi::c_void;
 use std::marker::PhantomData;
+use std::mem::ManuallyDrop;
 use std::ptr::NonNull;
 
 use crate::capi::*;
@@ -79,4 +81,34 @@ impl Stash<'static> {
 
         Self::from_ptr(ptr)
     }
+
+    /// Creates a lazy-populated stash whose content is populated by evaluating the populator on demand.
+    ///
+    /// The provided populator is polled at most once when reading the stash. It also drops everything it owns when
+    /// being called. However, a stash may be dropped without being read, and the content of the populator is leaked if
+    /// this happens. This method also makes no attempt to claim these leaked resources. Given such limitation, unless
+    /// the usage of the stash can be known for certain in advance (like feeding a [`crate::scheme::Response`]), usage
+    /// of this method is discouraged.
+    ///
+    /// Despite the above limitation, this method can be useful to create an owning stash with zero-cost copying (only
+    /// the future is copied in the C++ library), eliminating the need of explicitly moving data together with a
+    /// borrowed stash.
+    pub fn lazy(populator: impl FnOnce() -> Stash<'static> + Send + 'static) -> Self {
+        // A lazy stash internally maintains a future and polls the populator at most once.
+        // The populator may be moved to another thread, but it won't be shared as only the future object in C++ is
+        // copied when copying the stash.
+        let bb = Box::new(populator) as Box<dyn FnOnce() -> Stash<'static>>;
+        let arg = Box::into_raw(Box::new(bb));
+        let ptr = unsafe { saucer_stash_lazy_with_arg(Some(stash_lazy_trampoline), arg as *mut c_void) };
+
+        Self::from_ptr(ptr)
+    }
+}
+
+extern "C" fn stash_lazy_trampoline(arg: *mut c_void) -> *mut saucer_stash {
+    let bb = unsafe { Box::from_raw(arg as *mut Box<dyn FnOnce() -> Stash<'static>>) };
+    // The C library will take care of freeing the returned stash, thus the drop method must not be run
+    let st = ManuallyDrop::new(bb());
+    // Both the stash and its data are taken by the C library, no free needed
+    st.as_ptr()
 }

@@ -1,9 +1,9 @@
 use saucers::app::App;
 use saucers::options::AppOptions;
 use saucers::prefs::Preferences;
+use saucers::webview::Webview;
 use saucers::webview::events::DomReadyEvent;
 use saucers::webview::events::FaviconEvent;
-use saucers::webview::Webview;
 
 fn main() {
     // Create an app to manage the event cycle.

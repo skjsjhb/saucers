@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::marker::PhantomData;
-use std::ptr::null_mut;
 use std::ptr::NonNull;
+use std::ptr::null_mut;
 use std::rc::Rc;
-use std::sync::mpmc::Sender;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use std::sync::Weak;
+use std::sync::mpmc::Sender;
 
 use crate::app::App;
 use crate::capi::*;

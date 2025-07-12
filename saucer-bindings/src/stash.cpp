@@ -41,4 +41,16 @@ extern "C"
                 return rtn;
             }));
     }
+
+    saucer_stash *saucer_stash_lazy_with_arg(saucer_stash_lazy_callback_with_arg callback, void *arg) {
+        return saucer_stash::from(saucer::stash<>::lazy(
+            [callback, arg]() {
+                auto *handle = std::invoke(callback, arg);
+                auto rtn = std::move(handle->value());
+
+                delete handle;
+
+                return rtn;
+            }));
+    }
 }

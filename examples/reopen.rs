@@ -1,8 +1,8 @@
 use saucers::app::App;
 use saucers::options::AppOptions;
 use saucers::prefs::Preferences;
-use saucers::webview::events::CloseEvent;
 use saucers::webview::Webview;
+use saucers::webview::events::CloseEvent;
 
 /// This example shows how to listen for the close event and prevent the default behavior conditionally.
 fn main() {
