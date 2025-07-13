@@ -21,7 +21,6 @@ And by putting them together you can build cooler hybrid apps.
 This library pulls saucer (and its dependencies) and compiles them on the fly when building.
 Additional tools/libraries are needed for such workflow:
 
-- A nightly Rust compiler (refer to [`rust-toolchain.toml`](rust-toolchain.toml) for recommendation).
 - A C++ compiler which supports C++23. Clang 17+ is recommended as it can also be used to perform cross-language LTO and
   emit bindings.
 - Clang 9+ or corresponding `libclang` (for `bindgen`).

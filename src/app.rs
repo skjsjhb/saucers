@@ -6,7 +6,7 @@ use std::sync::RwLock;
 use std::sync::Weak;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::mpmc::Sender;
+use std::sync::mpsc::Sender;
 use std::thread::ThreadId;
 
 use crate::capi::*;

@@ -60,18 +60,20 @@ impl AppOptions {
 
         v.push(null_mut()); // Terminating nullptr
 
-        let raw_vec = v.into_raw_parts();
+        let ptr = v.as_mut_ptr();
+        let len = v.len();
+        let cap = v.capacity();
 
         unsafe {
             let this = self.inner.as_ptr();
 
-            saucer_options_set_argc(this, raw_vec.1 as c_int);
+            saucer_options_set_argc(this, len as c_int);
 
             // SAFETY: The string array is disassembled, remains unchanged and lives longer than the C ref
-            saucer_options_set_argv(this, raw_vec.0); // Value borrowed in C
+            saucer_options_set_argv(this, ptr); // Value borrowed in C
         }
 
-        if let Some(ax) = self.args.replace(raw_vec) {
+        if let Some(ax) = self.args.replace((ptr, len, cap)) {
             drop_raw_args(ax);
         }
     }

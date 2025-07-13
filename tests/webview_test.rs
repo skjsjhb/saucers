@@ -48,10 +48,7 @@ fn do_webview_test() {
         FaviconEvent,
         Box::new({
             |_, icon| {
-                assert!(
-                    icon.data().data().is_some_and(|it| !it.is_empty()),
-                    "Icon should be retrieved"
-                );
+                assert!(!icon.data().data().is_empty(), "Icon should be retrieved");
             }
         })
     );
@@ -142,7 +139,7 @@ fn do_webview_test() {
         move |_, req, exc| {
             let _ = &arc;
             let st = req.content();
-            let body = String::from_utf8_lossy(st.data().unwrap());
+            let body = String::from_utf8_lossy(st.data());
             assert_eq!(req.method(), "POST", "Method of scheme request should be correct");
             assert_eq!(body, "ping!", "Body of scheme request should be correct");
 

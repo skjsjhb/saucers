@@ -71,6 +71,10 @@ fn main() {
                 "cargo:rustc-link-search=native={}/build/_deps/saucer-desktop-build/{cmake_profile}",
                 dst.display()
             );
+            println!(
+                "cargo:rustc-link-search=native={}/build/_deps/saucer-desktop-build",
+                dst.display()
+            );
             println!("cargo:rustc-link-lib=static=saucer-bindings-desktop");
             println!("cargo:rustc-link-lib=static=saucer-desktop");
         }
@@ -78,6 +82,10 @@ fn main() {
         if has_pdf_mod {
             println!(
                 "cargo:rustc-link-search=native={}/build/_deps/saucer-pdf-build/{cmake_profile}",
+                dst.display()
+            );
+            println!(
+                "cargo:rustc-link-search=native={}/build/_deps/saucer-pdf-build",
                 dst.display()
             );
             println!("cargo:rustc-link-lib=static=saucer-bindings-pdf");

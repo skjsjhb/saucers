@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use std::sync::Weak;
-use std::sync::mpmc::Sender;
+use std::sync::mpsc::Sender;
 
 use crate::app::App;
 use crate::capi::*;
@@ -138,10 +138,10 @@ impl UnsafeWebview {
 
         unsafe { saucer_webview_on_message_with_arg(self.as_ptr(), None, null_mut()) }
 
-        if let Some(ref mut wp) = self.ptr
-            && let Some(ptr) = wp.message_handler.take()
-        {
-            unsafe { drop(Box::from_raw(ptr)) }
+        if let Some(ref mut wp) = self.ptr {
+            if let Some(ptr) = wp.message_handler.take() {
+                unsafe { drop(Box::from_raw(ptr)) }
+            }
         }
     }
 

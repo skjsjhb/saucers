@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::sync::mpmc::Receiver;
-use std::sync::mpmc::Sender;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
+use std::thread::ThreadId;
 
 /// The sharable struct backing [`Collector`] with private access.
 ///
@@ -10,8 +11,14 @@ pub(crate) struct UnsafeCollector {
     tx: Sender<Box<dyn Collect>>,
     rx: Receiver<Box<dyn Collect>>,
     /// A counter that checks whether there are still unfreed raw handles.
-    counter: Arc<()>
+    counter: Arc<()>,
+    host_thread: ThreadId
 }
+
+// A collector holds a receiver which is `!Send`. However, the collector only accesses the receiver object on the
+// thread that creates it, such guarantee is hold by assertions and should not cause problem.
+unsafe impl Send for UnsafeCollector {}
+unsafe impl Sync for UnsafeCollector {}
 
 impl Drop for UnsafeCollector {
     fn drop(&mut self) {
@@ -25,12 +32,14 @@ impl Drop for UnsafeCollector {
 
 impl UnsafeCollector {
     pub(crate) fn try_collect(&self) {
+        self.assert_host_thread();
         while let Ok(a) = self.rx.try_recv() {
             a.collect();
         }
     }
 
     pub(crate) fn collect_now(&self) {
+        self.assert_host_thread();
         // New handles cannot be created and existing handles are only possible to be dropped in the loop below,
         // making this count reliable.
         let mut eh = Arc::strong_count(&self.counter);
@@ -45,13 +54,20 @@ impl UnsafeCollector {
 
     pub(crate) fn count(&self) -> Arc<()> { self.counter.clone() }
 
+    fn assert_host_thread(&self) {
+        if self.host_thread != std::thread::current().id() {
+            panic!("Collection cannot happen outside the host thread.")
+        }
+    }
+
     fn new() -> Self {
-        let (tx, rx) = std::sync::mpmc::channel();
+        let (tx, rx) = std::sync::mpsc::channel();
 
         Self {
             tx,
             rx,
-            counter: Arc::new(())
+            counter: Arc::new(()),
+            host_thread: std::thread::current().id()
         }
     }
 }

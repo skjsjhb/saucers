@@ -51,33 +51,20 @@ impl<'a> Stash<'a> {
     /// Gets the size of the stash.
     pub fn size(&self) -> usize { unsafe { saucer_stash_size(self.ptr.as_ptr()) } }
 
-    /// Tries to borrow and return the inner data. If the stash is empty or corrupted, [`None`] is returned.
-    pub fn data(&self) -> Option<&[u8]> {
-        if self.size() == 0 {
-            return None;
-        }
-
+    /// Returns the inner data.
+    pub fn data(&self) -> &[u8] {
+        // Each stash should have a non-null data pointer (empty stashes have empty vectors).
+        // Borrowed stashes can only be created by user and all references should be nonnull in Rust.
         let ptr = unsafe { saucer_stash_data(self.ptr.as_ptr()) };
-
-        if ptr.is_null() {
-            return None;
-        }
-
-        let dat = unsafe { std::slice::from_raw_parts(ptr, self.size()) };
-
-        Some(dat)
+        unsafe { std::slice::from_raw_parts(ptr, self.size()) }
     }
 }
 
 impl Stash<'static> {
-    /// Creates a new stash by taking the given data.
-    ///
-    /// The provided [`Vec`] is disassembled and moved to the C API. It will no longer be managed by Rust after being
-    /// moved. As this operation involves allocating and freeing data using different allocators, the
-    /// [`core::alloc::Allocator`] of the [`Vec`] must be compatible with the system allocator.
-    pub fn take(data: Vec<u8>) -> Self {
-        let (buf, len, _) = data.into_raw_parts();
-        let ptr = unsafe { saucer_stash_from(buf, len) };
+    /// Creates a new stash by copying the given data.
+    pub fn copy(data: impl AsRef<[u8]>) -> Self {
+        let r = data.as_ref();
+        let ptr = unsafe { saucer_stash_from(r.as_ptr(), r.len()) };
 
         Self::from_ptr(ptr)
     }
@@ -103,6 +90,10 @@ impl Stash<'static> {
 
         Self::from_ptr(ptr)
     }
+}
+
+impl<'a> AsRef<[u8]> for Stash<'a> {
+    fn as_ref(&self) -> &[u8] { self.data() }
 }
 
 extern "C" fn stash_lazy_trampoline(arg: *mut c_void) -> *mut saucer_stash {
