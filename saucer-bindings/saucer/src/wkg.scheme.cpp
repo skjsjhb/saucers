@@ -29,7 +29,23 @@ namespace saucer::scheme
             return stash<>::empty();
         }
 
-        auto content = utils::g_bytes_ptr{g_input_stream_read_bytes(stream.get(), G_MAXSSIZE, nullptr, nullptr)};
+        GByteArray* arr = g_byte_array_new();
+        gchar buffer[4096];
+
+        while (true) {
+            auto bytes_read = g_input_stream_read(stream.get(), buffer, sizeof(buffer), nullptr, nullptr);
+            if (bytes_read == 0) {
+                break;
+            }
+            if (bytes_read == -1) {
+                g_byte_array_unref(arr);
+                return stash<>::empty();
+            }
+
+            g_byte_array_append(arr, (guint8*)buffer, bytes_read);
+        }
+
+        auto content = utils::g_bytes_ptr{g_byte_array_free_to_bytes(arr)};
 
         if (!content)
         {

@@ -96,8 +96,11 @@ namespace saucer
             set_dev_tools(false);
         };
 
-        inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
-        inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
+        if (prefs.default_scripts)
+        {
+            inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
+            inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
+        }
     }
 
     webview::~webview()

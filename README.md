@@ -18,20 +18,24 @@ And by putting them together you can build cooler hybrid apps.
 
 ## Prerequisites
 
-This library pulls saucer (and its dependencies) and compiles them on the fly when building.
-Additional tools/libraries are needed for such workflow:
+This library compiles saucer on-the-fly when building. Additional tools/libraries are needed for such workflow:
 
-- A C++ compiler which supports C++23. Clang 17+ is recommended as it can also be used to perform cross-language LTO and
-  emit bindings.
+- A C++ compiler which fully supports C++23. Candidates listed
+  in [build script of saucer](saucer-bindings/saucer/CMakeLists.txt):
+    - Clang 18+ (Recommended as it also powers `bindgen`)
+    - GCC 14+
+    - AppleClang 15+
+    - MSVC 19.38+
+    - ClangCL 17+
 - Clang 9+ or corresponding `libclang` (for `bindgen`).
-- GNU patch (for patching certain source files of saucer).
 - Make sure to have [system dependencies](https://saucer.app/docs/getting-started/dependencies) installed.
-- CMake. For cross-language LTO you also need Ninja.
-- When building for Windows, MSVC is required (MinGW will likely not to work). For cross-language LTO, `clang-cl` and
-  `lld-link` are also required.
+- CMake.
+- When building for Windows, MSVC is required (MinGW will likely not to work).
 
-Saucer uses CPM to pull compile-time dependencies. It may take noticeable time to compile this crate during the build
-process.
+> [!NOTE]
+> When building in Cargo, this crate make take noticeable time to compile (several minutes or more) as CMake spends
+> considerable time configuring and compiling saucer (with the C bindings) itself. There is currently no workaround for
+> this.
 
 ## Example
 
@@ -153,13 +157,16 @@ Follow these steps to begin:
    This can be done by appending the following to `.cargo/config.toml`:
 
    ```toml
-   [target.x86_64-pc-windows-msvc]
-   rustflags = ["-Clinker-plugin-lto", "-Clinker=lld-link"]
+    [target.'cfg(target_os = "windows")']
+    linker = "lld-link"
+    rustflags = ["-Clinker-plugin-lto"]
 
-   [target.'cfg(any(target_os = "linux", target_os = "macos"))']
-   rustflags = ["-Clinker-plugin-lto", "-Clinker=clang", "-Clink-arg=-fuse-ld=lld"]
+    [target.'cfg(any(target_os = "linux", target_os = "macos"))']
+    linker = "clang"
+    rustflags = ["-Clinker-plugin-lto", "-Clink-arg=-fuse-ld=lld"]
    ```
-4. Run the build in release mode. You should see the binary size being greatly reduced.
+
+4. Run the build in release mode. The binary size should be reduced.
 
 > [!NOTE]
 >
@@ -172,6 +179,7 @@ Follow these steps to begin:
   subset (major parts, but not all) of the C++ API. We currently have no plan to integrate with the C++ API.
 - Backend cannot be customized yet.
 - Safety (mostly the `Send` trait) of certain APIs are not fully verified.
+- Cross-compilation is not supported.
 
 ## License
 

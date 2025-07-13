@@ -44,7 +44,14 @@ namespace saucer
             utils::string_handle raw;
             args->TryGetWebMessageAsString(&raw.reset());
 
-            auto message = utils::narrow(raw.get());
+            auto *str = raw.get();
+
+            if (str == nullptr)
+            {
+                return S_OK;
+            }
+
+            auto message = utils::narrow(str);
             m_parent->post([this, message = std::move(message)] { on_message(message); });
 
             return S_OK;
@@ -149,7 +156,10 @@ namespace saucer
             settings->put_AreBrowserAcceleratorKeysEnabled(false);
         }
 
-        inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
+        if (prefs.default_scripts)
+        {
+            inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
+        }
     }
 
     webview::~webview()

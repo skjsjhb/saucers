@@ -83,40 +83,11 @@ target_sources(${PROJECT_NAME} PRIVATE
 
 include("cmake/cpm.cmake")
 
-CPMFindPackage(
-        NAME saucer
-        VERSION 6.0.1
-        GIT_REPOSITORY "https://github.com/saucer/saucer"
-        OPTIONS "saucer_static ON" "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON" "saucer_package_all ON"
-)
+set(saucer_static ON)
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+set(saucer_package_all ON)
 
-# Patches saucer sources
-set(SAUCER_PATCHED_FLAG "${CMAKE_CURRENT_BINARY_DIR}/.saucer_patched")
-
-find_program(PATCH_COMMAND patch)
-if (NOT PATCH_COMMAND)
-    message(FATAL_ERROR "Patch command not found. Please install 'patch' or ensure it's in your PATH.")
-endif ()
-
-add_custom_command(
-        OUTPUT "${SAUCER_PATCHED_FLAG}"
-        COMMAND ${CMAKE_COMMAND} -E touch "${SAUCER_PATCHED_FLAG}"
-        COMMAND "${PATCH_COMMAND}" -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patches/fix-app-quit.patch"
-        COMMAND "${PATCH_COMMAND}" -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patches/fix-request-body-crash.patch"
-        COMMAND "${PATCH_COMMAND}" -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patches/optional-default-scripts.patch"
-        COMMAND "${PATCH_COMMAND}" -p1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patches/fix-empty-message-crash.patch"
-        WORKING_DIRECTORY "${saucer_SOURCE_DIR}"
-        COMMENT "Patching saucer sources..."
-)
-
-add_custom_target(
-        patch_saucer
-        ALL
-        DEPENDS
-        "${SAUCER_PATCHED_FLAG}"
-)
-
-add_dependencies(${PROJECT_NAME} patch_saucer)
+add_subdirectory(saucer)
 
 target_link_libraries(${PROJECT_NAME} PUBLIC saucer::saucer)
 
