@@ -118,4 +118,42 @@ extern "C"
 
         return rtn;
     }
+
+    char **saucer_desktop_pick_files_with_size(saucer_desktop *handle, saucer_picker_options *options, size_t *size) {
+        auto result = handle->value().pick<type::files>(options->value());
+
+        if (!result) {
+            return nullptr;
+        }
+
+        const auto count = result->size();
+        auto **rtn = static_cast<char **>(saucer_memory_alloc(count * sizeof(char *)));
+
+        for (auto i = 0u; result->size() > i; i++) {
+            rtn[i] = bindings::alloc(result->at(i).string());
+        }
+
+        *size = count;
+
+        return rtn;
+    }
+
+    char **saucer_desktop_pick_folders_with_size(saucer_desktop *handle, saucer_picker_options *options, size_t *size) {
+        auto result = handle->value().pick<type::files>(options->value());
+
+        if (!result) {
+            return nullptr;
+        }
+
+        const auto count = result->size();
+        auto **rtn = static_cast<char **>(saucer_memory_alloc(count * sizeof(char *)));
+
+        for (auto i = 0u; result->size() > i; i++) {
+            rtn[i] = bindings::alloc(result->at(i).string());
+        }
+
+        *size = count;
+
+        return rtn;
+    }
 }

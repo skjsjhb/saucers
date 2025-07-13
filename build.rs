@@ -8,7 +8,18 @@ fn main() {
     let build_static = std::env::var("CARGO_FEATURE_STATIC_LIB").is_ok();
     let crs_lto = std::env::var("CARGO_FEATURE_CROSS_LTO").is_ok() && build_static;
 
+    let has_desktop_mod = std::env::var("CARGO_FEATURE_DESKTOP_MOD").is_ok();
+    let has_pdf_mod = std::env::var("CARGO_FEATURE_PDF_MOD").is_ok();
+
     let mut conf = cmake::Config::new("saucer-bindings");
+
+    if has_desktop_mod {
+        conf.define("saucer_desktop", "ON");
+    }
+
+    if has_pdf_mod {
+        conf.define("saucer_pdf", "ON");
+    }
 
     if build_static {
         // On Windows, MSVC is required to build static library.
@@ -45,6 +56,7 @@ fn main() {
         }
     }
 
+    let cmake_profile = conf.get_profile().to_owned();
     let dst = conf.build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());
@@ -53,6 +65,24 @@ fn main() {
     if build_static {
         println!("cargo:rustc-link-lib=static=saucer-bindings");
         println!("cargo:rustc-link-lib=static=saucer");
+
+        if has_desktop_mod {
+            println!(
+                "cargo:rustc-link-search=native={}/build/_deps/saucer-desktop-build/{cmake_profile}",
+                dst.display()
+            );
+            println!("cargo:rustc-link-lib=static=saucer-bindings-desktop");
+            println!("cargo:rustc-link-lib=static=saucer-desktop");
+        }
+
+        if has_pdf_mod {
+            println!(
+                "cargo:rustc-link-search=native={}/build/_deps/saucer-pdf-build/{cmake_profile}",
+                dst.display()
+            );
+            println!("cargo:rustc-link-lib=static=saucer-bindings-pdf");
+            println!("cargo:rustc-link-lib=static=saucer-pdf");
+        }
 
         if is_debug {
             println!("cargo:rustc-link-lib=static=fmtd");
@@ -72,6 +102,7 @@ fn main() {
             println!("cargo:rustc-link-lib=dylib=user32");
             println!("cargo:rustc-link-lib=dylib=advapi32");
             println!("cargo:rustc-link-lib=dylib=ole32");
+            println!("cargo:rustc-link-lib=dylib=shell32");
         }
 
         if os == "macos" {
@@ -93,9 +124,19 @@ fn main() {
 
     println!("cargo:rerun-if-changed=saucer-bindings/CMakeLists.txt");
 
+    let mut header = std::fs::read_to_string("saucer-bindings/include/saucer/all.rs.h").unwrap();
+
+    if has_desktop_mod {
+        header.push_str("\n#include \"../modules/desktop/include/saucer/desktop.h\"");
+    }
+
+    if has_pdf_mod {
+        header.push_str("\n#include \"../modules/pdf/include/saucer/pdf.h\"");
+    }
+
     let bindings = bindgen::Builder::default()
-        .header("saucer-bindings/include/saucer/all.rs.h")
-        .clang_args(["-x", "c++"])
+        .header_contents("saucer-bindings/include/saucer/all.rs.h", &header)
+        .clang_args(["-x", "c++", "-I./saucer-bindings/include"])
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Failed to generate bindings");

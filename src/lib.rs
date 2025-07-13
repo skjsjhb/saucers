@@ -27,3 +27,9 @@ pub mod scheme;
 pub mod script;
 pub mod stash;
 pub mod webview;
+
+#[cfg(feature = "desktop-mod")]
+pub mod desktop;
+
+#[cfg(feature = "pdf-mod")]
+pub mod pdf;

@@ -5,8 +5,8 @@ project(saucer-bindings LANGUAGES CXX VERSION 5.0.0)
 # Library switches
 # --------------------------------------------------------------------------------------------------------
 
-option(saucer_desktop "Enable support for the desktop module" ON)
-option(saucer_pdf "Enable support for the pdf module" ON)
+option(saucer_desktop "Enable support for the desktop module" OFF)
+option(saucer_pdf "Enable support for the pdf module" OFF)
 option(SAUCERS_SHARED_LIB "Build a shared library" ON)
 
 # --------------------------------------------------------------------------------------------------------
@@ -123,6 +123,8 @@ target_link_libraries(${PROJECT_NAME} PUBLIC saucer::saucer)
 # --------------------------------------------------------------------------------------------------------
 # Setup Modules
 # --------------------------------------------------------------------------------------------------------
+
+set(MODULES_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/..")
 
 include("cmake/module.cmake")
 

@@ -25,6 +25,8 @@ path = "src/bin/webview_test.rs"
 bench = false
 
 [features]
-default = ["static-lib"]
+default = ["static-lib", "desktop-mod", "pdf-mod"]
 static-lib = []
 cross-lto = ["static-lib"]
+desktop-mod = []
+pdf-mod = []

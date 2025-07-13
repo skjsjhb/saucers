@@ -108,7 +108,12 @@ fn main() {
 }
 ```
 
-You can use `cargo run --package saucers --bin saucers` to run this example after added it as a dependency.
+## Saucer Modules
+
+This library includes bindings for [saucer/desktop](https://github.com/saucer/desktop) and
+[saucer/pdf](https://github.com/saucer/pdf). They are made available by default and should only affect the size when
+your code actually uses them. However, one might want to disable these modules when building a dynamic library. The
+modules are controlled by the `desktop-mod` and `pdf-mod` features and can be enabled/disabled as needed.
 
 ## Linking
 

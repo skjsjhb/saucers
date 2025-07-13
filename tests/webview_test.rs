@@ -49,7 +49,7 @@ fn do_webview_test() {
         Box::new({
             |_, icon| {
                 assert!(
-                    icon.data().data().is_some_and(|it| it.len() > 0),
+                    icon.data().data().is_some_and(|it| !it.is_empty()),
                     "Icon should be retrieved"
                 );
             }
@@ -166,7 +166,7 @@ fn do_webview_test() {
     app.run();
 
     assert!(
-        rx.recv().unwrap().len() > 0,
+        !rx.recv().unwrap().is_empty(),
         "Event handler should receive correct arguments"
     );
 

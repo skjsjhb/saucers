@@ -43,6 +43,12 @@ extern "C"
     /*[[sc::requires_free]]*/ SAUCER_DESKTOP_EXPORT char **saucer_desktop_pick_folders(saucer_desktop *,
                                                                                        saucer_picker_options *options);
 
+    /*[[sc::requires_free]]*/ SAUCER_DESKTOP_EXPORT char **saucer_desktop_pick_files_with_size(saucer_desktop *,
+                                                                                     saucer_picker_options *options, size_t *size);
+
+    /*[[sc::requires_free]]*/ SAUCER_DESKTOP_EXPORT char **saucer_desktop_pick_folders_with_size(saucer_desktop *,
+                                                                   saucer_picker_options *options, size_t *size);
+
 #ifdef __cplusplus
 }
 #endif
