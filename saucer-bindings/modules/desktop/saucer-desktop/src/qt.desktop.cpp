@@ -43,7 +43,11 @@ namespace saucer::modules
 
         if (opts.initial)
         {
-            dialog.setDirectory(QString::fromStdString(opts.initial.value()));
+#ifdef _WIN32
+            dialog.setDirectory(QString::fromWCharArray(opts.initial.value().c_str()));
+#else
+            dialog.setDirectory(QString::fromStdString(opts.initial.value().c_str()));
+#endif
         }
 
         const auto filters = opts.filters | std::ranges::to<QStringList>();

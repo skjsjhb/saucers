@@ -173,6 +173,20 @@ Follow these steps to begin:
 > On Windows, you might encounter errors when compiling proc-macros.
 > This can be fixed by adding `--target x86_64-pc-windows-msvc` when invoking Cargo.
 
+## The Qt Backends
+
+This library provides support for the Qt backends, but with limitations:
+
+- Path to Qt installation must be defined explicitly using `QT6_DIR` or `QT5_DIR` in order to link them.
+- Qt runtime files must be copied (or added to search paths) manually when running.
+  This includes dynamic libraries and browser resources, see
+  [Deploying Qt WebEngine Applications](https://doc.qt.io/qt-6/qtwebengine-deploying.html) for details.
+  Qt libraries are always dynamically linked regardless of the settings.
+- Qt backends are not tested. Bugs, caveats and/or limitations may apply.
+
+The features `qt5` and `qt6` can be used to enable Qt support. Enabling Qt support automatically disables the default
+backend. Only one Qt version can be enabled at a time.
+
 ## Known Limitations
 
 - This project is built on top of the [C-Bindings for saucer](https://github.com/saucer/bindings), which exports only a

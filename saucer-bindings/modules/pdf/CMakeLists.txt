@@ -33,11 +33,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 # Setup Dependencies
 # --------------------------------------------------------------------------------------------------------
 
-CPMFindPackage(
-    NAME           saucer-pdf
-    VERSION        1.0.1
-    GIT_REPOSITORY "https://github.com/saucer/pdf"
-)
+add_subdirectory(saucer-pdf)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE saucer::pdf)
 saucer_bindings_add_module(${PROJECT_NAME} "SAUCER_PDF_EXPORT")

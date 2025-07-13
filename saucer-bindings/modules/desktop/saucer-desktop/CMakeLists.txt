@@ -89,3 +89,11 @@ if (saucer_backend STREQUAL "WebView2")
 
   target_sources(${PROJECT_NAME} PRIVATE ${win_sources})
 endif()
+
+cmake_policy(SET CMP0177 NEW)
+install(
+        TARGETS ${PROJECT_NAME}
+        ARCHIVE DESTINATION "${MODULES_INSTALL_DIR}/lib"
+        LIBRARY DESTINATION "${MODULES_INSTALL_DIR}"
+        RUNTIME DESTINATION "${MODULES_INSTALL_DIR}"
+)

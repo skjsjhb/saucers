@@ -34,11 +34,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 # Setup Dependencies
 # --------------------------------------------------------------------------------------------------------
 
-CPMFindPackage(
-    NAME           saucer-desktop
-    VERSION        2.0.0
-    GIT_REPOSITORY "https://github.com/saucer/desktop"
-)
+add_subdirectory(saucer-desktop)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE saucer::desktop)
 saucer_bindings_add_module(${PROJECT_NAME} "SAUCER_DESKTOP_EXPORT")

@@ -5,6 +5,21 @@ fn main() {
     let profile = std::env::var("PROFILE").unwrap();
     let is_debug = profile == "debug" || profile == "test";
 
+    let is_qt5 = std::env::var("CARGO_FEATURE_QT5").is_ok();
+    let is_qt6 = std::env::var("CARGO_FEATURE_QT6").is_ok();
+
+    if is_qt5 && is_qt6 {
+        panic!("Only one Qt backend may be specified.");
+    }
+
+    let qt_dir = if is_qt6 {
+        std::env::var("QT6_DIR").expect("Please set `QT6_DIR` to the Qt installation.")
+    } else if is_qt5 {
+        std::env::var("QT5_DIR").expect("Please set `QT5_DIR` to the Qt installation.")
+    } else {
+        "".to_owned()
+    };
+
     let build_static = std::env::var("CARGO_FEATURE_STATIC_LIB").is_ok();
     let crs_lto = std::env::var("CARGO_FEATURE_CROSS_LTO").is_ok() && build_static;
 
@@ -19,6 +34,14 @@ fn main() {
 
     if has_pdf_mod {
         conf.define("saucer_pdf", "ON");
+    }
+
+    if is_qt5 {
+        conf.define("saucer_backend", "Qt5");
+    }
+
+    if is_qt6 {
+        conf.define("saucer_backend", "Qt6");
     }
 
     if build_static {
@@ -66,6 +89,11 @@ fn main() {
         println!("cargo:rustc-link-lib=static=saucer-bindings");
         println!("cargo:rustc-link-lib=static=saucer");
 
+        if !qt_dir.is_empty() {
+            println!("cargo:rustc-link-search=native={}/lib", qt_dir);
+            println!("cargo:rustc-link-search=native={}", qt_dir);
+        }
+
         if has_desktop_mod {
             println!(
                 "cargo:rustc-link-search=native={}/build/_deps/saucer-desktop-build/{cmake_profile}",
@@ -98,8 +126,50 @@ fn main() {
             println!("cargo:rustc-link-lib=static=fmt");
         }
 
+        if is_qt5 {
+            let libs = vec![
+                "Qt5Widgets",
+                "Qt5WebChannel",
+                "Qt5WebEngineCore",
+                "Qt5Network",
+                "Qt5WebEngineWidgets",
+                "Qt5Core",
+                "Qt5Gui",
+            ];
+
+            for lib in libs {
+                if is_debug {
+                    println!("cargo:rustc-link-lib=dylib={}d", lib);
+                } else {
+                    println!("cargo:rustc-link-lib=dylib={}", lib);
+                }
+            }
+        }
+
+        if is_qt6 {
+            let libs = vec![
+                "Qt6Widgets",
+                "Qt6WebChannel",
+                "Qt6WebEngineCore",
+                "Qt6Network",
+                "Qt6WebEngineWidgets",
+                "Qt6Core",
+                "Qt6Gui",
+            ];
+
+            for lib in libs {
+                if is_debug {
+                    println!("cargo:rustc-link-lib=dylib={}d", lib);
+                } else {
+                    println!("cargo:rustc-link-lib=dylib={}", lib);
+                }
+            }
+        }
+
         if os == "windows" {
-            println!("cargo:rustc-link-lib=static=WebView2LoaderStatic");
+            if !is_qt5 && !is_qt6 {
+                println!("cargo:rustc-link-lib=static=WebView2LoaderStatic");
+            }
 
             if is_debug {
                 println!("cargo:rustc-link-lib=dylib=msvcrtd");
@@ -114,17 +184,23 @@ fn main() {
         }
 
         if os == "macos" {
+            if !is_qt5 && !is_qt6 {
+                println!("cargo:rustc-link-lib=framework=WebKit");
+                println!("cargo:rustc-link-lib=framework=CoreImage");
+            }
+
             println!("cargo:rustc-link-lib=dylib=c++");
             println!("cargo:rustc-link-lib=framework=Cocoa");
-            println!("cargo:rustc-link-lib=framework=WebKit");
-            println!("cargo:rustc-link-lib=framework=CoreImage");
         }
 
         if os == "linux" {
+            if !is_qt5 && !is_qt6 {
+                pkg_config::probe_library("gtk4").unwrap();
+                pkg_config::probe_library("webkitgtk-6.0").unwrap();
+                pkg_config::probe_library("libadwaita-1").unwrap();
+            }
+
             println!("cargo:rustc-link-lib=dylib=stdc++");
-            pkg_config::probe_library("gtk4").unwrap();
-            pkg_config::probe_library("webkitgtk-6.0").unwrap();
-            pkg_config::probe_library("libadwaita-1").unwrap();
         }
     } else {
         println!("cargo:rustc-link-lib=dylib=saucer-bindings");

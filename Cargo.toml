@@ -26,6 +26,8 @@ bench = false
 
 [features]
 default = ["static-lib", "desktop-mod", "pdf-mod"]
+qt5 = []
+qt6 = []
 static-lib = []
 cross-lto = ["static-lib"]
 desktop-mod = []

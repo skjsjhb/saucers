@@ -88,7 +88,11 @@ namespace saucer
             return;
         }
 
-        pixmap->save(path.c_str());
+#ifdef _WIN32
+        pixmap->save(QString::fromWCharArray(path.c_str()));
+#else
+        pixmap->save(QString::fromStdString(path.c_str()));
+#endif
     }
 
     std::optional<icon> icon::from(const stash<> &ico)
