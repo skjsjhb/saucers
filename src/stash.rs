@@ -1,6 +1,5 @@
 use std::ffi::c_void;
 use std::marker::PhantomData;
-use std::mem::ManuallyDrop;
 use std::ptr::NonNull;
 
 use crate::capi::*;
@@ -12,6 +11,9 @@ use crate::capi::*;
 /// specified lifetime.
 pub struct Stash<'a> {
     ptr: NonNull<saucer_stash>,
+    /// When set to true, does not free the stash when this handle is dropped. This is required to transfer the inner
+    /// stash object to the C API.
+    leak: bool,
     _owns: PhantomData<(saucer_stash, &'a ())>
 }
 
@@ -19,13 +21,18 @@ unsafe impl Send for Stash<'_> {}
 unsafe impl Sync for Stash<'_> {}
 
 impl Drop for Stash<'_> {
-    fn drop(&mut self) { unsafe { saucer_stash_free(self.ptr.as_ptr()) } }
+    fn drop(&mut self) {
+        if !self.leak {
+            unsafe { saucer_stash_free(self.ptr.as_ptr()) }
+        }
+    }
 }
 
 impl Stash<'_> {
     pub(crate) fn from_ptr(ptr: *mut saucer_stash) -> Self {
         Self {
             ptr: NonNull::new(ptr).expect("Invalid stash data"),
+            leak: false,
             _owns: PhantomData
         }
     }
@@ -98,8 +105,8 @@ impl<'a> AsRef<[u8]> for Stash<'a> {
 
 extern "C" fn stash_lazy_trampoline(arg: *mut c_void) -> *mut saucer_stash {
     let bb = unsafe { Box::from_raw(arg as *mut Box<dyn FnOnce() -> Stash<'static>>) };
-    // The C library will take care of freeing the returned stash, thus the drop method must not be run
-    let st = ManuallyDrop::new(bb());
-    // Both the stash and its data are taken by the C library, no free needed
+    // The C library will free the stash object, so only the handle is dropped.
+    let mut st = bb();
+    st.leak = true;
     st.as_ptr()
 }
