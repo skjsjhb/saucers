@@ -33,7 +33,7 @@ impl From<SchemeError> for SAUCER_SCHEME_ERROR {
 /// The executor object used to resolve or reject a request to a custom scheme.
 ///
 /// An executor is passed as an argument to the scheme handler when a request comes. The handler can then
-/// [`Executor::resolve_here`] or [`Executor::reject`] the request.
+/// [`Executor::resolve_here`], [`Executor::resolve`] or [`Executor::reject`] the request.
 pub struct Executor {
     ptr: Option<NonNull<saucer_scheme_executor>>,
     app: App,
