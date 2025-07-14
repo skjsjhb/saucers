@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 fn main() {
     let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap();
     let profile = std::env::var("PROFILE").unwrap();
     let is_debug = profile == "debug" || profile == "test";
 
@@ -21,7 +22,6 @@ fn main() {
     };
 
     let build_static = std::env::var("CARGO_FEATURE_STATIC_LIB").is_ok();
-    let crs_lto = std::env::var("CARGO_FEATURE_CROSS_LTO").is_ok() && build_static;
 
     let has_desktop_mod = std::env::var("CARGO_FEATURE_DESKTOP_MOD").is_ok();
     let has_pdf_mod = std::env::var("CARGO_FEATURE_PDF_MOD").is_ok();
@@ -45,41 +45,33 @@ fn main() {
     }
 
     if build_static {
-        // On Windows WebView2, MSVC is required to build static library.
-        if os == "windows" && !is_qt5 && !is_qt6 {
-            let target = std::env::var("CARGO_CFG_TARGET_ENV").unwrap();
-
-            if target != "msvc" {
-                panic!("MSVC is required to statically link WebView2.");
-            }
-        }
-
         conf.define("SAUCERS_SHARED_LIB", "OFF");
-    }
 
-    if crs_lto && !is_debug {
-        conf.define("CMAKE_INTERPROCEDURAL_OPTIMIZATION", "ON");
-    }
-
-    if crs_lto {
-        if os == "windows" {
-            // MSVC version of clang-cl generates worse result and requires additional setup
-            // Ninja usually comes with cmake and is faster and easier to set these flags
-            conf.generator("Ninja");
-            conf.define("CMAKE_C_COMPILER", "clang-cl");
-            conf.define("CMAKE_CXX_COMPILER", "clang-cl");
-            conf.define("CMAKE_ASM_COMPILER", "clang-cl");
-            conf.define("CMAKE_AR", "llvm-lib");
-        } else {
-            // Enforce clang for both macOS and Linux
-            conf.define("CMAKE_C_COMPILER", "clang");
-            conf.define("CMAKE_CXX_COMPILER", "clang");
-            conf.define("CMAKE_ASM_COMPILER", "clang");
-            conf.define("CMAKE_AR", "llvm-ar");
+        if !is_debug {
+            conf.define("CMAKE_INTERPROCEDURAL_OPTIMIZATION", "ON");
         }
     }
 
-    let cmake_profile = conf.get_profile().to_owned();
+    fn maybe_forward_env(conf: &mut cmake::Config, envs: &str, cms: &str) {
+        if let Ok(ev) = std::env::var(envs) {
+            println!("Forwarding env {} to {}", envs, cms);
+            conf.define(cms, ev);
+        }
+    }
+
+    maybe_forward_env(&mut conf, "SAUCERS_CMAKE_C_COMPILER", "CMAKE_C_COMPILER");
+    maybe_forward_env(&mut conf, "SAUCERS_CMAKE_CXX_COMPILER", "CMAKE_CXX_COMPILER");
+    maybe_forward_env(&mut conf, "SAUCERS_CMAKE_ASM_COMPILER", "CMAKE_ASM_COMPILER");
+    maybe_forward_env(&mut conf, "SAUCERS_CMAKE_AR", "CMAKE_AR");
+
+    if let Ok(ev) = std::env::var("SAUCERS_CMAKE_GENERATOR") {
+        conf.generator(ev);
+    }
+
+    if let Ok(ev) = std::env::var("SAUCERS_CMAKE_GENERATOR_TOOLSET") {
+        conf.generator_toolset(ev);
+    }
+
     let dst = conf.build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());
@@ -95,27 +87,11 @@ fn main() {
         }
 
         if has_desktop_mod {
-            println!(
-                "cargo:rustc-link-search=native={}/build/_deps/saucer-desktop-build/{cmake_profile}",
-                dst.display()
-            );
-            println!(
-                "cargo:rustc-link-search=native={}/build/_deps/saucer-desktop-build",
-                dst.display()
-            );
             println!("cargo:rustc-link-lib=static=saucer-bindings-desktop");
             println!("cargo:rustc-link-lib=static=saucer-desktop");
         }
 
         if has_pdf_mod {
-            println!(
-                "cargo:rustc-link-search=native={}/build/_deps/saucer-pdf-build/{cmake_profile}",
-                dst.display()
-            );
-            println!(
-                "cargo:rustc-link-search=native={}/build/_deps/saucer-pdf-build",
-                dst.display()
-            );
             println!("cargo:rustc-link-lib=static=saucer-bindings-pdf");
             println!("cargo:rustc-link-lib=static=saucer-pdf");
         }
@@ -168,7 +144,18 @@ fn main() {
 
         if os == "windows" {
             if !is_qt5 && !is_qt6 {
-                println!("cargo:rustc-link-lib=static=WebView2LoaderStatic");
+                if target_env == "msvc" {
+                    // The static library can only be linked to MSVC ABI
+                    println!("cargo:rustc-link-lib=static=WebView2LoaderStatic");
+                } else {
+                    // Add WebView2 package to search paths
+                    println!(
+                        "cargo:rustc-link-search=native={}/build/saucer/nuget/Microsoft.Web.WebView2/build/native/{}",
+                        dst.display(),
+                        get_windows_arch()
+                    );
+                    println!("cargo:rustc-link-lib=dylib=WebView2Loader");
+                }
             }
 
             if is_debug {
@@ -229,4 +216,16 @@ fn main() {
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Failed to emit bindings");
+}
+
+fn get_windows_arch() -> String {
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+
+    match target_arch.as_str() {
+        "x86_64" => "x64",
+        "x86" => "x86",
+        "aarch64" => "arm64",
+        _ => panic!("Unsupported Windows architecture: {}", target_arch)
+    }
+    .to_owned()
 }

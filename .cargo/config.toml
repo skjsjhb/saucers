@@ -1,7 +1,0 @@
-[target.'cfg(target_os = "windows")']
-linker = "lld-link"
-rustflags = ["-Clinker-plugin-lto"]
-
-[target.'cfg(any(target_os = "linux", target_os = "macos"))']
-linker = "clang"
-rustflags = ["-Clinker-plugin-lto", "-Clink-arg=-fuse-ld=lld"]

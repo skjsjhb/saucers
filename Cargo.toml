@@ -7,6 +7,12 @@ license = "MIT"
 homepage = "https://github.com/skjsjhb/saucers"
 repository = "https://github.com/skjsjhb/saucers"
 readme = "README.md"
+exclude = [
+    ".cargo/**/*",
+    "**/.github/**/*",
+    "rust-toolchain.toml",
+    ".gitattributes"
+]
 
 [build-dependencies]
 bindgen = "0.72.0"
@@ -29,6 +35,5 @@ default = ["static-lib", "desktop-mod", "pdf-mod"]
 qt5 = []
 qt6 = []
 static-lib = []
-cross-lto = ["static-lib"]
 desktop-mod = []
 pdf-mod = []

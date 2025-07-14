@@ -128,6 +128,21 @@ larger binary unless cross-langauge LTO is enabled (which involves some non-triv
 
 Enable feature `static-lib` to emit and link to a static library (enabled by default).
 
+### Customize Toolchain
+
+Some CMake options are exposed and can be configured using environment variables:
+
+- `SAUCERS_CMAKE_C_COMPILER`: Sets the C compiler used to compile saucer.
+- `SAUCERS_CMAKE_CXX_COMPILER`: Sets the C++ compiler used to compile saucer.
+- `SAUCERS_CMAKE_ASM_COMPILER`: Sets the assembler used to compile saucer.
+- `SAUCERS_CMAKE_AR`: Sets the static library archiver for saucer.
+- `SAUCERS_CMAKE_GENERATOR`: Sets the CMake generator.
+- `SAUCERS_CMAKE_GENERATOR_TOOLSET`: Sets the CMake generator toolset.
+
+By default, these options are unset and CMake is free to choose appropriate values for the platform.
+Overriding these variables can change the way saucer is compiled.
+As an example, using Clang as the compiler can make cross-language happen.
+
 ### Cross-Language LTO
 
 One of the many advantages of saucer is its tiny size.
@@ -149,8 +164,36 @@ Follow these steps to begin:
 
    Add these tools to `PATH` so CMake and Cargo can find it.
 
-2. Enable the `cross-lto` feature in `Cargo.toml` or when compiling.
-   This instructs the build script to toggle certain flags of CMake to enable LTO.
+2. Instruct CMake to use Clang.
+
+   For Windows, add these flags to `.cargo/config.toml`:
+
+   ```toml
+   SAUCERS_CMAKE_GENERATOR = "Ninja"
+   SAUCERS_CMAKE_C_COMPILER = "clang-cl"
+   SAUCERS_CMAKE_CXX_COMPILER = "clang-cl"
+   SAUCERS_CMAKE_AR = "llvm-lib"
+   ```
+
+   For macOS and GNU/Linux, add these flags:
+
+   ```toml
+   SAUCERS_CMAKE_C_COMPILER = "clang"
+   SAUCERS_CMAKE_CXX_COMPILER = "clang"
+   SAUCERS_CMAKE_AR = "llvm-ar"
+   ```
+
+   > [!NOTE]
+   >
+   > On Windows, if you installed LLVM via the official installer or `WinGet`, it's recommended to use `Ninja` for
+   > performance and compatibility. Make sure to add `clang-cl` to `PATH` for CMake to find it.
+   >
+   > If `clang-cl` is installed from the Visual Studio Installer, then the Visual Studio generator must be used. Remove
+   > the flags above, and set `SAUCERS_CMAKE_GENERATOR_TOOLSET` to `ClangCL`. If CMake fails to automatically detect
+   > the generator, also set `SAUCERS_CMAKE_GENERATOR` to an appropriate value.
+   >
+   > At the time of writing, the LLVM version of `clang-cl` produces smaller binaries for some unknown reasons. Besides,
+   > the build time can also be greatly reduced if using `Ninja`.
 
 3. Make sure to use LLD as the linker for the Rust part.
    This can be done by appending the following to `.cargo/config.toml`:
@@ -166,11 +209,6 @@ Follow these steps to begin:
    ```
 
 4. Run the build in release mode. The binary size should be reduced.
-
-> [!NOTE]
->
-> On Windows, you might encounter errors when compiling proc-macros.
-> This can be fixed by adding `--target x86_64-pc-windows-msvc` when invoking Cargo.
 
 ## The Qt Backends
 
