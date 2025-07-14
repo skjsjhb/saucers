@@ -156,10 +156,7 @@ namespace saucer
             settings->put_AreBrowserAcceleratorKeysEnabled(false);
         }
 
-        if (prefs.default_scripts)
-        {
-            inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
-        }
+        inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
     }
 
     webview::~webview()

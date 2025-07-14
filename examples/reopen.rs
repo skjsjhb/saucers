@@ -28,7 +28,7 @@ fn main() {
         })
     );
 
-    w.set_url("about:blank");
+    w.set_url("data:text/html,");
     w.show();
 
     app.run();

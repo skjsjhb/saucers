@@ -175,17 +175,19 @@ Follow these steps to begin:
 
 ## The Qt Backends
 
-This library provides support for the Qt backends, but with limitations:
+This library provides support for the Qt WebEngine backends. To use Qt, follow these steps:
 
-- Path to Qt installation must be defined explicitly using `QT6_DIR` or `QT5_DIR` in order to link them.
-- Qt runtime files must be copied (or added to search paths) manually when running.
-  This includes dynamic libraries and browser resources, see
-  [Deploying Qt WebEngine Applications](https://doc.qt.io/qt-6/qtwebengine-deploying.html) for details.
-  Qt libraries are always dynamically linked regardless of the settings.
-- Qt backends are not tested. Bugs, caveats and/or limitations may apply.
+1. Install Qt (Qt6 is recommended). Make sure to also add Qt WebEngine, Qt WebChannel and Qt Positioning.
+2. If building on Windows, set `QT5_DIR` or `QT6_DIR` to the installation directory.
+3. Build with `qt5` or `qt6` feature enabled.
+4. Add Qt libraries and resources to the runtime search path, then run the app. See
+   [Deploying Qt WebEngine Applications](https://doc.qt.io/qt-6/qtwebengine-deploying.html) for details.
 
-The features `qt5` and `qt6` can be used to enable Qt support. Enabling Qt support automatically disables the default
-backend. Only one Qt version can be enabled at a time.
+Qt backends are of secondary support (comparing to system native webview) with the following limitations:
+
+- Runtime libraries and resources are not handled automatically.
+- Even saucer is statically linked, Qt libraries are still dynamically linked.
+- Downgraded performance in debug mode.
 
 ## Known Limitations
 

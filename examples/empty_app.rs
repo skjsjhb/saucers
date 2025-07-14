@@ -11,7 +11,8 @@ fn main() {
     // Title bar may not display correctly if size is not set
     w.set_size(1152, 648);
 
-    w.set_url("about:blank");
+    // Avoid using `about:blank` as it can cause some issues with internal scripts
+    w.set_url("data:text/html,");
     w.show();
 
     app.run();

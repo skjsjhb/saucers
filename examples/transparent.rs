@@ -14,7 +14,7 @@ fn main() {
     w.set_size(1152, 648);
     w.set_background(0, 0, 0, 0);
 
-    w.set_url("about:blank");
+    w.set_url("data:text/html,");
     w.execute(
         r#"
         document.head.insertAdjacentHTML("beforeend", `

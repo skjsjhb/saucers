@@ -53,7 +53,6 @@ namespace saucer
       public:
         bool persistent_cookies{true};
         bool hardware_acceleration{true};
-        bool default_scripts{true};
 
       public:
         fs::path storage_path;

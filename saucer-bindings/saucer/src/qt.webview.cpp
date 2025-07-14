@@ -13,21 +13,6 @@
 #include <QWebEngineSettings>
 #include <QWebEngineUrlScheme>
 
-static std::string load_qt_channel_script()
-{
-    QFile qwebchannel{":/qtwebchannel/qwebchannel.js"};
-
-    if (!qwebchannel.open(QIODevice::ReadOnly))
-    {
-        return "";
-    }
-
-    const auto content = qwebchannel.readAll().toStdString();
-    qwebchannel.close();
-
-    return content;
-}
-
 namespace saucer
 {
     webview::webview(const preferences &prefs) : window(prefs), extensible(this), m_impl(std::make_unique<impl>())
@@ -92,15 +77,8 @@ namespace saucer
             set_dev_tools(false);
         };
 
-        if (prefs.default_scripts)
-        {
-            inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
-            inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
-        }
-        else
-        {
-            inject({.code = load_qt_channel_script(), .time = load_time::creation, .permanent = true});
-        }
+        inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
+        inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
 
         m_impl->web_view->show();
     }

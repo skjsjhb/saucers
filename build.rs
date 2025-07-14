@@ -13,9 +13,9 @@ fn main() {
     }
 
     let qt_dir = if is_qt6 {
-        std::env::var("QT6_DIR").expect("Please set `QT6_DIR` to the Qt installation.")
+        std::env::var("QT6_DIR").unwrap_or("".to_owned())
     } else if is_qt5 {
-        std::env::var("QT5_DIR").expect("Please set `QT5_DIR` to the Qt installation.")
+        std::env::var("QT5_DIR").unwrap_or("".to_owned())
     } else {
         "".to_owned()
     };
@@ -45,8 +45,8 @@ fn main() {
     }
 
     if build_static {
-        // On Windows, MSVC is required to build static library.
-        if os == "windows" {
+        // On Windows WebView2, MSVC is required to build static library.
+        if os == "windows" && !is_qt5 && !is_qt6 {
             let target = std::env::var("CARGO_CFG_TARGET_ENV").unwrap();
 
             if target != "msvc" {
@@ -138,7 +138,7 @@ fn main() {
             ];
 
             for lib in libs {
-                if is_debug {
+                if is_debug && os == "windows" {
                     println!("cargo:rustc-link-lib=dylib={}d", lib);
                 } else {
                     println!("cargo:rustc-link-lib=dylib={}", lib);

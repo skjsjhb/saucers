@@ -27,10 +27,6 @@ extern "C"
         handle->value().hardware_acceleration = enabled;
     }
 
-    void saucer_preferences_set_default_scripts(saucer_preferences*handle, bool enabled) {
-        handle->value().default_scripts = enabled;
-    }
-
     void saucer_preferences_set_storage_path(saucer_preferences *handle, const char *path)
     {
         handle->value().storage_path = path;

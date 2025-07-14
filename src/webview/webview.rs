@@ -408,6 +408,9 @@ impl Webview {
     }
 
     /// Navigates to the given URL.
+    ///
+    /// Avoid navigating to a URL without DOM content (e.g. `about:blank`) as some saucer internal scripts rely on the
+    /// presence of the DOM to function. For an empty page, consider using an empty data URL like `data:text/html,`.
     pub fn set_url(&self, url: impl AsRef<str>) { rtoc!(url => s; saucer_webview_set_url(self.as_ptr(), s.as_ptr())) }
 
     /// Navigates back.
@@ -479,6 +482,8 @@ impl Webview {
     pub fn inject(&self, script: &Script) { unsafe { saucer_webview_inject(self.as_ptr(), script.as_ptr()) } }
 
     /// Executes the given code in the main script world. Returns immediately without waiting.
+    ///
+    /// This method delays the script to be executed when DOM is loaded if posted earlier that this happens.
     ///
     /// This method executes the code without any sanitizing, making it have the same security concerns as
     /// [`Self::inject`] and [`Script`]. In short, executing arbitrary code is of **SEVERE RISK**! See the docs above

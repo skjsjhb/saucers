@@ -132,11 +132,8 @@ namespace saucer
         g_signal_connect(controller, "pressed", G_CALLBACK(+on_click), this);
         gtk_widget_add_controller(GTK_WIDGET(m_impl->web_view), GTK_EVENT_CONTROLLER(controller));
 
-        if (prefs.default_scripts)
-        {
-            inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
-            inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
-        }
+        inject({.code = impl::inject_script(), .time = load_time::creation, .permanent = true});
+        inject({.code = std::string{impl::ready_script}, .time = load_time::ready, .permanent = true});
     }
 
     webview::~webview()

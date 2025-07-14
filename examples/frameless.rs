@@ -13,7 +13,7 @@ fn main() {
     w.set_decorations(false);
     w.set_size(1152, 648);
 
-    w.set_url("about:blank");
+    w.set_url("data:text/html,");
 
     // Add a button which can be used to drag the window.
     // There currently isn't an attribute for using an element as the close button. Consider using messages for this.
