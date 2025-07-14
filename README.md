@@ -126,8 +126,7 @@ This library can be configured to produce either static or dynamic library.
 Linking to the static library eliminates the need of shipping additional dynamic library files, but will result in
 larger binary unless cross-langauge LTO is enabled (which involves some non-trivial setups).
 
-Enable feature `static-lib` to emit a static library (enabled by default) whenever possible.
-For platforms that's not currently supported, a dynamic library is built as the fallback.
+Enable feature `static-lib` to emit and link to a static library (enabled by default).
 
 ### Cross-Language LTO
 
@@ -193,7 +192,6 @@ Qt backends are of secondary support (comparing to system native webview) with t
 
 - This project is built on top of the [C-Bindings for saucer](https://github.com/saucer/bindings), which exports only a
   subset (major parts, but not all) of the C++ API. We currently have no plan to integrate with the C++ API.
-- Backend cannot be customized yet.
 - Safety (mostly the `Send` trait) of certain APIs are not fully verified.
 - Cross-compilation is not supported.
 
