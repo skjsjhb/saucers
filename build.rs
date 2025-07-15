@@ -144,18 +144,13 @@ fn main() {
 
         if os == "windows" {
             if !is_qt5 && !is_qt6 {
-                if target_env == "msvc" {
-                    // The static library can only be linked to MSVC ABI
-                    println!("cargo:rustc-link-lib=static=WebView2LoaderStatic");
-                } else {
-                    // Add WebView2 package to search paths
-                    println!(
-                        "cargo:rustc-link-search=native={}/build/saucer/nuget/Microsoft.Web.WebView2/build/native/{}",
-                        dst.display(),
-                        get_windows_arch()
-                    );
-                    println!("cargo:rustc-link-lib=dylib=WebView2Loader");
+                if target_env != "msvc" {
+                    // Due to the use of certain headers (e.g. WRL), MinGW compilers are verified not to work
+                    // Thus the Rust ABI must be MSVC
+                    panic!("MSVC ABI is required on Windows.");
                 }
+
+                println!("cargo:rustc-link-lib=static=WebView2LoaderStatic");
             }
 
             if is_debug {
@@ -216,16 +211,4 @@ fn main() {
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("Failed to emit bindings");
-}
-
-fn get_windows_arch() -> String {
-    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-
-    match target_arch.as_str() {
-        "x86_64" => "x64",
-        "x86" => "x86",
-        "aarch64" => "arm64",
-        _ => panic!("Unsupported Windows architecture: {}", target_arch)
-    }
-    .to_owned()
 }

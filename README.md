@@ -26,16 +26,16 @@ This library compiles saucer on-the-fly when building. Additional tools/librarie
     - GCC 14+
     - AppleClang 15+
     - MSVC 19.38+
-    - ClangCL 17+
+    - Clang 17+ (When used as `clang-cl` on Windows)
 - Clang 9+ or corresponding `libclang` (for `bindgen`).
 - Make sure to have [system dependencies](https://saucer.app/docs/getting-started/dependencies) installed.
 - CMake.
-- When building for Windows, MSVC is required (MinGW will likely not to work).
+- When building for Windows, MSVC is required (MinGW has been verified not to work with WinRT libraries like WRL).
 
 > [!NOTE]
 > When building in Cargo, this crate make take noticeable time to compile (several minutes or more) as CMake spends
-> considerable time configuring and compiling saucer (with the C bindings) itself. There is currently no workaround for
-> this.
+> considerable time configuring and compiling saucer (with the C bindings) itself. To speed up compilation, use Ninja
+> and the LLVM toolchain. See [Customize Toolchain](#customize-toolchain) for details.
 
 ## Example
 
