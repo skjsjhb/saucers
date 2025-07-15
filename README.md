@@ -183,18 +183,6 @@ Follow these steps to begin:
    SAUCERS_CMAKE_AR = "llvm-ar"
    ```
 
-   > [!NOTE]
-   >
-   > On Windows, if you installed LLVM via the official installer or `WinGet`, it's recommended to use `Ninja` for
-   > performance and compatibility. Make sure to add `clang-cl` to `PATH` for CMake to find it.
-   >
-   > If `clang-cl` is installed from the Visual Studio Installer, then the Visual Studio generator must be used. Remove
-   > the flags above, and set `SAUCERS_CMAKE_GENERATOR_TOOLSET` to `ClangCL`. If CMake fails to automatically detect
-   > the generator, also set `SAUCERS_CMAKE_GENERATOR` to an appropriate value.
-   >
-   > At the time of writing, the LLVM version of `clang-cl` produces smaller binaries for some unknown reasons. Besides,
-   > the build time can also be greatly reduced if using `Ninja`.
-
 3. Make sure to use LLD as the linker for the Rust part.
    This can be done by appending the following to `.cargo/config.toml`:
 
@@ -209,6 +197,18 @@ Follow these steps to begin:
    ```
 
 4. Run the build in release mode. The binary size should be reduced.
+
+> [!NOTE]
+>
+> On Windows, if you installed LLVM via the official installer or WinGet, it's recommended to use Ninja for performance
+> and compatibility. Make sure to add `clang-cl` to `PATH` for CMake to find it.
+>
+> If `clang-cl` is installed from the Visual Studio Installer, then the Visual Studio generator must be used. Remove
+> the flags for CMake, and set `SAUCERS_CMAKE_GENERATOR_TOOLSET` to `ClangCL`. If CMake fails to automatically detect
+> the generator, also set `SAUCERS_CMAKE_GENERATOR` to an appropriate value.
+>
+> At the time of writing, the LLVM version of `clang-cl` produces smaller binaries for some unknown reasons. Besides,
+> the build time can also be greatly reduced if using Ninja.
 
 ## The Qt Backends
 
