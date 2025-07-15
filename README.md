@@ -1,7 +1,7 @@
 <hr/>
 
 <div align="center">
-<img alt="Saucers Logo" width="300" src="saucers.png"/>
+<img alt="Saucers Logo" width="300" src="saucers.webp"/>
 </div>
 
 <p align="center">Rust bindings for <a href="https://github.com/saucer/saucer">saucer</a></p>
