@@ -169,7 +169,7 @@ impl Webview {
     /// # Panics
     ///
     /// Panics if not called on the event thread.
-    pub fn on<T: WebviewEvent>(&self, _: T, handler: Box<T::Handler>) -> u64 {
+    pub fn on<T: WebviewEvent>(&self, handler: Box<T::Handler>) -> u64 {
         if !self.is_event_thread() {
             panic!("Event handlers must be added on the event thread.")
         }
@@ -209,7 +209,7 @@ impl Webview {
     /// # Panics
     ///
     /// Panics if not called on the event thread.
-    pub fn once<T: WebviewEvent>(&self, _: T, handler: Box<T::OnceHandler>) {
+    pub fn once<T: WebviewEvent>(&self, handler: Box<T::OnceHandler>) {
         if !self.is_event_thread() {
             panic!("Event handlers must be added on the event thread.")
         }
@@ -263,7 +263,7 @@ impl Webview {
     /// Removes a previously added event handler for event type `T` with the given ID.
     ///
     /// This method must be called on the event thread, or it does nothing.
-    pub fn off<T: WebviewEvent>(&self, _: T, id: u64) {
+    pub fn off<T: WebviewEvent>(&self, id: u64) {
         if !self.is_event_thread() {
             return;
         }
@@ -281,7 +281,7 @@ impl Webview {
     /// Removes all handlers of the event type `T`.
     ///
     /// This method must be called on the event thread, or it does nothing.
-    pub fn clear<T: WebviewEvent>(&self, _: T) {
+    pub fn clear<T: WebviewEvent>(&self) {
         if !self.is_event_thread() {
             return;
         }

@@ -13,12 +13,9 @@ fn main() {
 
     w.set_size(1152, 648);
 
-    w.on(
-        TitleEvent,
-        Box::new(|w, title| {
-            w.set_title(title);
-        })
-    );
+    w.on::<TitleEvent>(Box::new(|w, title| {
+        w.set_title(title);
+    }));
 
     w.set_url("https://saucer.app");
     w.show();

@@ -14,19 +14,16 @@ fn main() {
 
     let mut allow_close = false;
 
-    w.on(
-        CloseEvent,
-        Box::new(move |_| {
-            if !allow_close {
-                allow_close = true;
-                println!("Press again to close the window!");
-                false
-            } else {
-                println!("OK I'm closing.");
-                true
-            }
-        })
-    );
+    w.on::<CloseEvent>(Box::new(move |_| {
+        if !allow_close {
+            allow_close = true;
+            println!("Press again to close the window!");
+            false
+        } else {
+            println!("OK I'm closing.");
+            true
+        }
+    }));
 
     w.set_url("data:text/html,");
     w.show();

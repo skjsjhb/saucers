@@ -50,9 +50,9 @@ Examples can be found in the [`examples`](examples) directory. Additionally, for
 use saucers::app::App;
 use saucers::options::AppOptions;
 use saucers::prefs::Preferences;
+use saucers::webview::Webview;
 use saucers::webview::events::DomReadyEvent;
 use saucers::webview::events::FaviconEvent;
-use saucers::webview::Webview;
 
 fn main() {
     // Create an app to manage the event cycle.
@@ -69,21 +69,16 @@ fn main() {
     drop(prefs);
 
     // Register a one-time listener for DOM ready event.
+    // Use the turbofish syntax to specify the event type.
     // Prefer using the handle argument instead of capturing to prevent cycle references.
-    w.once(
-        DomReadyEvent,
-        Box::new(move |w| {
-            w.execute("window.saucer.internal.send_message(`Hello! Your user agent is '${navigator.userAgent}'!`);");
-        })
-    );
+    w.once::<DomReadyEvent>(Box::new(move |w| {
+        w.execute("window.saucer.internal.send_message(`Hello! Your user agent is '${navigator.userAgent}'!`);");
+    }));
 
     // Registers a repeatable event handler for favicon event.
-    let on_favicon_id = w.on(
-        FaviconEvent,
-        Box::new(|_, icon| {
-            println!("Wow, you have a favicon of {} bytes!", icon.data().size());
-        })
-    );
+    let on_favicon_id = w.on::<FaviconEvent>(Box::new(|_, icon| {
+        println!("Wow, you have a favicon of {} bytes!", icon.data().size());
+    }));
 
     // Handles incoming webview messages.
     // This API forwards the message as-is, allowing more complex channels to be built on it.
@@ -102,7 +97,7 @@ fn main() {
     app.run();
 
     // An event handler can be cleared using its ID.
-    w.off(FaviconEvent, on_favicon_id);
+    w.off::<FaviconEvent>(on_favicon_id);
 
     // Rust will clean up everything in correct order. But to make it clear, we will drop it manually.
     drop(w);
