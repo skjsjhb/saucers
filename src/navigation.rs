@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use crate::capi::*;
-use crate::ctor;
+use crate::macros::ctor;
 
 /// Contains details about a navigation action.
 pub struct WebviewNavigation {

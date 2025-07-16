@@ -120,8 +120,8 @@ impl UnsafeApp {
 /// sharable among threads, but certain features are restricted to the event thread, see method docs for details.
 ///
 /// App handles are clonable, but cloning a handle does not clone the underlying event loop. A new app must be created
-/// using the [`App::create`] constructor. Similarly, dropping an app handle does not destroy the app, unless it's the
-/// last handle present in the process.
+/// using the [`App::create`] or [`App::new`] constructor. Similarly, dropping an app handle does not destroy the app,
+/// unless it's the last handle present in the process.
 ///
 /// Capturing an app handle in various handlers can lead to circular references easily and will block the underlying
 /// resources from being freed. It's advised to use [`Weak`] to prevent directly capturing a handle.
@@ -254,11 +254,11 @@ impl App {
 
     /// Runs a closure in the background thread pool and waits until it finishes.
     ///
-    /// Like [`Self::post`], this method makes no guarantee on when the closure will be called, or whether it will end
-    /// up being executed. However, unlike [`Self::post`], the closure is **NOT** guaranteed to be dropped when it fails
-    /// to be executed (e.g. the thread pool is full before dropping the app), means that content captured by the
-    /// closure might be leaked forever. Given the description above, it's **absolutely discouraged** to capture any
-    /// handle inside the closure without [`Weak`], unless for very specific valid use case.
+    /// Like [`Self::post`], this method makes no guarantee on when the closure will be called. However, unlike
+    /// [`Self::post`], this method does not reject the closure based on the status of the thread pool, means that
+    /// content captured by the closure might be leaked forever, sometimes even likely. Such possibility are not guarded
+    /// or reduced, even in attempts, by this method. Given the description above, it's **absolutely discouraged** to
+    /// capture any handle inside the closure without [`Weak`], unless for very specific valid use case.
     ///
     /// # Deprecation Notes
     ///

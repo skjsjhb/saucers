@@ -4,8 +4,8 @@ use std::ffi::c_void;
 use std::rc::Rc;
 
 use crate::capi::*;
-use crate::ctor;
 use crate::icon::Icon;
+use crate::macros::ctor;
 use crate::navigation::WebviewNavigation;
 use crate::webview::Webview;
 use crate::webview::WebviewRef;

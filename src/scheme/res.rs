@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use crate::capi::*;
-use crate::rtoc;
+use crate::macros::rtoc;
 use crate::stash::Stash;
 
 /// Contains response details to reply a request to a custom scheme.

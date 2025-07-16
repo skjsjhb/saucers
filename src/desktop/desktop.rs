@@ -4,9 +4,9 @@ use std::ptr::NonNull;
 
 use crate::app::App;
 use crate::capi::*;
-use crate::ctor;
 use crate::desktop::PickerOptions;
-use crate::rtoc;
+use crate::macros::ctor;
+use crate::macros::rtoc;
 
 /// The desktop module providing file picking and URL opening.
 ///

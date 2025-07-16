@@ -6,11 +6,12 @@ use std::ptr::NonNull;
 use std::ptr::null_mut;
 
 use crate::capi::*;
-use crate::rtoc;
+use crate::macros::rtoc;
 
 /// Options for the application.
 pub struct AppOptions {
     inner: NonNull<saucer_options>,
+    /// The C API uses the address of the args, but we store it as raw pointer, making the struct still `Unpin`.
     args: Option<(*mut *mut c_char, usize, usize)>,
     _owns: PhantomData<saucer_options>
 }

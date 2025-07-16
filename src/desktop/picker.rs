@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use crate::capi::*;
-use crate::rtoc;
+use crate::macros::rtoc;
 
 pub struct PickerOptions {
     ptr: NonNull<saucer_picker_options>,

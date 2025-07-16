@@ -16,10 +16,10 @@ use crate::app::App;
 use crate::capi::*;
 use crate::collector::Collect;
 use crate::collector::UnsafeCollector;
-use crate::ctor;
 use crate::embed::EmbedFile;
+use crate::macros::ctor;
+use crate::macros::rtoc;
 use crate::prefs::Preferences;
-use crate::rtoc;
 use crate::scheme::Executor;
 use crate::scheme::Request;
 use crate::script::Script;
@@ -33,10 +33,10 @@ pub(crate) struct WebviewPtr {
     _owns: PhantomData<saucer_handle>,
     _counter: Arc<()>,
 
-    pub(crate) dyn_event_droppers: HashMap<(u32, u64), Box<dyn FnOnce() + 'static>>,
+    pub(in crate::webview) dyn_event_droppers: HashMap<(u32, u64), Box<dyn FnOnce() + 'static>>,
 
     // A pair of (checker, dropper), checker returns whether the dropper can be removed
-    pub(crate) once_event_droppers: Vec<(Box<dyn FnMut() -> bool + 'static>, Box<dyn FnOnce() + 'static>)>
+    pub(in crate::webview) once_event_droppers: Vec<(Box<dyn FnMut() -> bool + 'static>, Box<dyn FnOnce() + 'static>)>
 }
 
 unsafe impl Send for WebviewPtr {}

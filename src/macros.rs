@@ -1,4 +1,3 @@
-#[macro_export]
 macro_rules! ctor {
     (free, nullable, $ptr:expr) => {{
         unsafe {
@@ -47,7 +46,6 @@ macro_rules! ctor {
     }};
 }
 
-#[macro_export]
 macro_rules! rtoc {
     ($($arg:expr => $ptr:ident),+ ; $ex: expr) => {{
         use std::ffi::*;
@@ -55,3 +53,6 @@ macro_rules! rtoc {
         unsafe { $ex }
     }};
 }
+
+pub(crate) use ctor;
+pub(crate) use rtoc;

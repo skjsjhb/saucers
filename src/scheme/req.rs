@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use crate::capi::*;
-use crate::ctor;
+use crate::macros::ctor;
 use crate::stash::Stash;
 
 /// Contains request details of a request to a custom scheme.

@@ -7,7 +7,7 @@ pub use req::*;
 pub use res::*;
 
 use crate::capi::saucer_register_scheme;
-use crate::rtoc;
+use crate::macros::rtoc;
 
 /// Registers a custom scheme.
 ///
