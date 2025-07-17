@@ -61,7 +61,6 @@ fn main() {
 
     maybe_forward_env(&mut conf, "SAUCERS_CMAKE_C_COMPILER", "CMAKE_C_COMPILER");
     maybe_forward_env(&mut conf, "SAUCERS_CMAKE_CXX_COMPILER", "CMAKE_CXX_COMPILER");
-    maybe_forward_env(&mut conf, "SAUCERS_CMAKE_ASM_COMPILER", "CMAKE_ASM_COMPILER");
     maybe_forward_env(&mut conf, "SAUCERS_CMAKE_AR", "CMAKE_AR");
 
     if let Ok(ev) = std::env::var("SAUCERS_CMAKE_GENERATOR") {

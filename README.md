@@ -129,7 +129,6 @@ Some CMake options are exposed and can be configured using environment variables
 
 - `SAUCERS_CMAKE_C_COMPILER`: Sets the C compiler used to compile saucer.
 - `SAUCERS_CMAKE_CXX_COMPILER`: Sets the C++ compiler used to compile saucer.
-- `SAUCERS_CMAKE_ASM_COMPILER`: Sets the assembler used to compile saucer.
 - `SAUCERS_CMAKE_AR`: Sets the static library archiver for saucer.
 - `SAUCERS_CMAKE_GENERATOR`: Sets the CMake generator.
 - `SAUCERS_CMAKE_GENERATOR_TOOLSET`: Sets the CMake generator toolset.
@@ -192,6 +191,16 @@ Follow these steps to begin:
    ```
 
 4. Run the build in release mode. The binary size should be reduced.
+
+> [!TIP]
+>
+> On Windows, if any dependency uses proc-macros (which is very likely), make sure to explicitly set the target:
+>
+> ```shell
+> cargo build --target x86_64-pc-windows-msvc
+> ```
+>
+> See [Linker-plugin-based LTO](https://doc.rust-lang.org/rustc/linker-plugin-lto.html) for details.
 
 > [!NOTE]
 >
