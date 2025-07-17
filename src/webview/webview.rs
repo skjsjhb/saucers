@@ -235,6 +235,25 @@ extern "C" fn scheme_trampoline(
     let _ = Box::into_raw(bb);
 }
 
+/// Describes the window edge to be resized.
+pub enum WindowEdge {
+    Top,
+    Bottom,
+    Left,
+    Right
+}
+
+impl From<WindowEdge> for SAUCER_WINDOW_EDGE {
+    fn from(e: WindowEdge) -> Self {
+        match e {
+            WindowEdge::Top => SAUCER_WINDOW_EDGE_SAUCER_WINDOW_EDGE_TOP,
+            WindowEdge::Bottom => SAUCER_WINDOW_EDGE_SAUCER_WINDOW_EDGE_BOTTOM,
+            WindowEdge::Left => SAUCER_WINDOW_EDGE_SAUCER_WINDOW_EDGE_LEFT,
+            WindowEdge::Right => SAUCER_WINDOW_EDGE_SAUCER_WINDOW_EDGE_RIGHT
+        }
+    }
+}
+
 /// The webview handle.
 ///
 /// A webview handle manages the window and (possibly) the browser process behind it. Like [`App`], the handle is
@@ -617,6 +636,18 @@ impl Webview {
 
     /// Focuses the window.
     pub fn focus(&self) { unsafe { saucer_window_focus(self.as_ptr()) } }
+
+    /// Starts dragging the window at the current cursor position.
+    ///
+    /// A window can always be dragged using native control widgets. This method is primarily intended to be used to
+    /// implement dragging using HTML elements.
+    pub fn start_drag(&self) { unsafe { saucer_window_start_drag(self.as_ptr()) } }
+
+    /// Starts resizing the given edge of the window at the current cursor position.
+    ///
+    /// A window can be resized as long as it's set to be resizable. This method is primarily intended to be used to
+    /// implement resizing using HTML elements.
+    pub fn start_resize(&self, edge: WindowEdge) { unsafe { saucer_window_start_resize(self.as_ptr(), edge.into()) } }
 
     /// Sets whether the window is minimized.
     pub fn set_minimized(&self, b: bool) { unsafe { saucer_window_set_minimized(self.as_ptr(), b) } }
