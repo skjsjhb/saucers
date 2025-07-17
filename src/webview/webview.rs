@@ -17,6 +17,7 @@ use crate::capi::*;
 use crate::collector::Collect;
 use crate::collector::UnsafeCollector;
 use crate::embed::EmbedFile;
+use crate::icon::Icon;
 use crate::macros::ctor;
 use crate::macros::rtoc;
 use crate::prefs::Preferences;
@@ -634,6 +635,9 @@ impl Webview {
 
     /// Sets whether the window can be clicked through.
     pub fn set_click_through(&self, b: bool) { unsafe { saucer_window_set_click_through(self.as_ptr(), b) } }
+
+    /// Sets the window icon.
+    pub fn set_icon(&self, icon: &Icon) { unsafe { saucer_window_set_icon(self.as_ptr(), icon.as_ptr()) } }
 
     /// Sets the window title.
     pub fn set_title(&self, title: impl AsRef<str>) {

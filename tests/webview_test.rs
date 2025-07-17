@@ -42,8 +42,9 @@ fn do_webview_test() {
     }));
 
     w.once::<FaviconEvent>(Box::new({
-        |_, icon| {
+        |w, icon| {
             assert!(!icon.data().data().is_empty(), "Icon should be retrieved");
+            w.set_icon(&icon);
         }
     }));
 

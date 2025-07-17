@@ -57,4 +57,6 @@ impl Icon {
         let cst = CString::new(fp.as_ref()).unwrap();
         unsafe { saucer_icon_save(self.ptr.as_ptr(), cst.as_ptr()) }
     }
+
+    pub(crate) fn as_ptr(&self) -> *mut saucer_icon { self.ptr.as_ptr() }
 }
