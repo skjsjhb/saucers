@@ -229,7 +229,7 @@ extern "C" fn scheme_trampoline(
     let arc = (*bb).1.clone();
     if let Some(w) = bb.0.upgrade() {
         let req = Request::from_ptr(req);
-        let exec = Executor::from_ptr(exec, w.app());
+        let exec = Executor::from_ptr(exec);
         arc.lock().unwrap()(w, req, exec);
     }
     let _ = Box::into_raw(bb);

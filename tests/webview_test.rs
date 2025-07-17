@@ -127,7 +127,7 @@ fn do_webview_test() {
             let res = Response::new(&st, "text/plain");
 
             res.set_header("Access-Control-Allow-Origin", "*");
-            exc.resolve(res);
+            exc.resolve(&res);
         }
     });
 
