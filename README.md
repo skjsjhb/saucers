@@ -6,6 +6,8 @@
 
 <p align="center">Rust bindings for <a href="https://github.com/saucer/saucer">saucer</a></p>
 
+<p align="center"><a href="https://skjsjhb.github.io/saucers/saucers/index.html">Documentation</a></p>
+
 ---
 
 ## Why?
