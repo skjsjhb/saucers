@@ -1,3 +1,6 @@
+//! Webview events module.
+//!
+//! See [`WebviewEvent`], [`Webview::on`] and related items for details.
 use std::cell::RefCell;
 use std::ffi::c_char;
 use std::ffi::c_void;
@@ -10,21 +13,45 @@ use crate::navigation::WebviewNavigation;
 use crate::webview::Webview;
 use crate::webview::WebviewRef;
 
-pub trait WebviewEvent {
+/// Super trait for all webview events.
+///
+/// Methods of this trait shall be internal but are made public due to limitations of Rust. Implementations of this
+/// trait acts as opaque types that are only used when specifying event in [`Webview::on`], [`Webview::once`],
+/// [`Webview::off`] and [`Webview::clear`]. Fields of this trait are not part of the API.
+///
+/// # Safety
+///
+/// This trait is marked as unsafe because the event system rely on certain implementation details of the methods. Any
+/// attempt to implement this trait may break such conventions and is considered unsafe.
+pub unsafe trait WebviewEvent {
+    /// Handler type of the event. When this event is used with [`Webview::on`], it accepts a boxed handler of this
+    /// type.
     type Handler: ?Sized + 'static;
+
+    /// One-time handler type of the event. When this event is used with [`Webview::once`], it accepts a boxed handler
+    /// of this type.
     type OnceHandler: ?Sized + 'static;
 
+    /// Internal method.
     unsafe fn register(ptr: *mut saucer_handle, raw: *mut c_void) -> u64;
+
+    /// Internal method.
     unsafe fn register_once(ptr: *mut saucer_handle, raw: *mut c_void);
+
+    /// Internal method.
     unsafe fn unregister(ptr: *mut saucer_handle, id: u64);
+
+    /// Internal method.
     unsafe fn clear(ptr: *mut saucer_handle);
+
+    /// Internal method.
     fn event_id() -> u32;
 }
 
 macro_rules! make_event {
     ($name:ident($($arg:ty),*) -> $rt:ty, $chn:ident, $tra:ident, $tro:ident, $reg:ident, $reo:ident, $rem:ident, $clear:ident, $offset:expr) => {
         // pub struct ${ concat($name, Event) };
-        impl WebviewEvent for $name {
+        unsafe impl WebviewEvent for $name {
             type Handler = dyn (FnMut(Webview $(,$arg)*) -> $rt) + 'static;
             type OnceHandler = dyn (FnOnce(Webview $(,$arg)*) -> $rt) + 'static;
 

@@ -1,3 +1,7 @@
+//! Desktop module.
+//!
+//! See [`Desktop`] for details.
+
 mod desktop;
 mod picker;
 

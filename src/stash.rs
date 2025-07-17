@@ -1,3 +1,6 @@
+//! Read-only binary data representation module.
+//!
+//! See [`Stash`] for details.
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::NonNull;

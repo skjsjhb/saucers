@@ -1,3 +1,6 @@
+//! Resource collection module.
+//!
+//! See [`Collector`] for details.
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;

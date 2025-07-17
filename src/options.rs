@@ -1,3 +1,6 @@
+//! App options module.
+//!
+//! See [`AppOptions`] for details.
 use std::ffi::CString;
 use std::ffi::c_char;
 use std::ffi::c_int;

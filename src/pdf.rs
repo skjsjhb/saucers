@@ -1,3 +1,6 @@
+//! PDF module.
+//!
+//! See [`Pdf`] for details.
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 

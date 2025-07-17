@@ -1,3 +1,6 @@
+//! Webview preferences module.
+//!
+//! See [`Preferences`] for details.
 use std::ffi::CString;
 use std::marker::PhantomData;
 use std::ptr::NonNull;

@@ -1,3 +1,6 @@
+//! Webview navigation descriptor module.
+//!
+//! See [`WebviewNavigation`] for details.
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 

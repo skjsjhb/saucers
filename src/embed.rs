@@ -1,3 +1,6 @@
+//! Resource embedding module.
+//!
+//! See [`EmbedFile`] for details.
 use std::ffi::CString;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
