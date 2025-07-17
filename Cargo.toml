@@ -22,10 +22,12 @@ pkg-config = "0.3.32"
 [[bin]]
 name = "app-test-exec"
 path = "src/bin/app_test.rs"
+doc = false
 
 [[bin]]
 name = "webview-test-exec"
 path = "src/bin/webview_test.rs"
+doc = false
 
 [lib]
 bench = false
