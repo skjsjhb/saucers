@@ -19,7 +19,7 @@ fn main() {
     }));
 
     w.on::<FaviconEvent>(Box::new(|w, icon| {
-        w.set_icon(&icon);
+        w.set_icon(icon);
     }));
 
     w.set_url("https://saucer.app");

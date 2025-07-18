@@ -228,6 +228,7 @@ extern "C" fn scheme_trampoline(
     let bb = unsafe { Box::from_raw(raw as *mut (WebviewRef, Arc<Mutex<Box<dyn FnMut(Webview, Request, Executor)>>>)) };
     let arc = (*bb).1.clone();
     if let Some(w) = bb.0.upgrade() {
+        // Request data is copied, so it can be passed by value
         let req = Request::from_ptr(req);
         let exec = Executor::from_ptr(exec);
         arc.lock().unwrap()(w, req, exec);

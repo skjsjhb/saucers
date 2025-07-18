@@ -23,7 +23,9 @@ impl Drop for Icon {
 }
 
 impl Icon {
-    pub(crate) fn from_ptr(ptr: *mut saucer_icon) -> Self {
+    /// SAFETY: This struct has no lifetime specifier and an icon handle does not own its data. Instances created
+    /// using this method must be dropped before the handle is invalidated.
+    pub(crate) unsafe fn from_ptr(ptr: *mut saucer_icon) -> Self {
         Self {
             ptr: NonNull::new(ptr).expect("Invalid icon data"),
             _owns: PhantomData
@@ -37,7 +39,12 @@ impl Icon {
         unsafe {
             saucer_icon_from_file(&mut ptr as *mut *mut saucer_icon, cst.as_ptr());
         }
-        if ptr.is_null() { None } else { Some(Icon::from_ptr(ptr)) }
+        if ptr.is_null() {
+            None
+        } else {
+            // SAFETY: Data created using `from` is owning
+            Some(unsafe { Icon::from_ptr(ptr) })
+        }
     }
 
     /// Loads an icon from the given [`Stash`].
@@ -47,7 +54,12 @@ impl Icon {
             // Data copied internally in C
             saucer_icon_from_data(&mut ptr as *mut *mut saucer_icon, stash.as_ptr());
         }
-        if ptr.is_null() { None } else { Some(Icon::from_ptr(ptr)) }
+        if ptr.is_null() {
+            None
+        } else {
+            // SAFETY: Data created using `from` is owning
+            Some(unsafe { Icon::from_ptr(ptr) })
+        }
     }
 
     /// Checks whether the icon is empty.

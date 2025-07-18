@@ -161,7 +161,7 @@ make_webview_event!(DomReadyEvent() -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM
 make_webview_event!(NavigateEvent(&WebviewNavigation) -> bool, SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE, on_navigate_trampoline, once_navigate_trampoline);
 make_webview_event!(NavigatedEvent(&str) -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED, on_navigated_trampoline, once_navigated_trampoline);
 make_webview_event!(TitleEvent(&str) -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_trampoline, once_title_trampoline);
-make_webview_event!(FaviconEvent(Icon) -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON, on_favicon_trampoline, once_favicon_trampoline);
+make_webview_event!(FaviconEvent(&Icon) -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON, on_favicon_trampoline, once_favicon_trampoline);
 make_webview_event!(LoadEvent(WebviewLoadState) -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_LOAD, on_load_trampoline, once_load_trampoline);
 make_window_event!(DecoratedEvent(bool) -> (), SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_DECORATED, on_decorated_trampoline, once_decorated_trampoline);
 make_window_event!(MaximizeEvent(bool) -> (), SAUCER_WINDOW_EVENT_SAUCER_WINDOW_EVENT_MAXIMIZE, on_maximize_trampoline, once_maximize_trampoline);
@@ -419,8 +419,10 @@ extern "C" fn once_title_trampoline(h: *mut saucer_handle, arg: *mut c_void, url
 }
 
 extern "C" fn once_favicon_trampoline(_: *mut saucer_handle, arg: *mut c_void, icon: *mut saucer_icon) {
-    let icon = Icon::from_ptr(icon);
-    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Option<Box<dyn FnOnce(Webview, Icon)>>>>)) };
+    // This icon is borrowed
+    // Make a reference here so no one can move it out
+    let icon = unsafe { &Icon::from_ptr(icon) };
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Option<Box<dyn FnOnce(Webview, &Icon)>>>>)) };
     do_once_trampoline!(bb; icon);
     let _ = Box::into_raw(bb);
 }
@@ -525,8 +527,8 @@ extern "C" fn on_title_trampoline(h: *mut saucer_handle, arg: *mut c_void, url: 
 }
 
 extern "C" fn on_favicon_trampoline(_: *mut saucer_handle, arg: *mut c_void, icon: *mut saucer_icon) {
-    let icon = Icon::from_ptr(icon);
-    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, Icon)>>>)) };
+    let icon = unsafe { &Icon::from_ptr(icon) };
+    let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, &Icon)>>>)) };
     do_mut_trampoline!(bb; icon);
     let _ = Box::into_raw(bb);
 }
