@@ -10,6 +10,14 @@
 
 ---
 
+<div align="center">
+
+![Workflow Status](https://github.com/skjsjhb/saucers/actions/workflows/rust.yml/badge.svg)
+![Upstream Version](https://img.shields.io/github/v/tag/saucer/saucer?label=Upstream)
+![Bindings Version](https://img.shields.io/badge/Bindings-v6.0.1-orange)
+
+</div> 
+
 ## Why?
 
 [Saucer](https://github.com/saucer/saucer) is a cool webview library.
