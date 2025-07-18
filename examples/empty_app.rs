@@ -3,6 +3,7 @@ use saucers::options::AppOptions;
 use saucers::prefs::Preferences;
 use saucers::webview::Webview;
 
+/// This example demonstrates how to create a well-behaved empty app with minimum amount of code.
 fn main() {
     let (_cc, app) = App::new(AppOptions::new("EmptyApp"));
 

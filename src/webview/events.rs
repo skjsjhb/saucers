@@ -158,7 +158,7 @@ pub struct CloseEvent;
 // Some editors seem unable to expand macros with `macro_metavar_expr_concat` correctly.
 // Use the full name can provide potentially better DX for users.
 make_webview_event!(DomReadyEvent() -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_DOM_READY, on_dom_ready_trampoline, once_dom_ready_trampoline);
-make_webview_event!(NavigateEvent(WebviewNavigation) -> bool, SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE, on_navigate_trampoline, once_navigate_trampoline);
+make_webview_event!(NavigateEvent(&WebviewNavigation) -> bool, SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATE, on_navigate_trampoline, once_navigate_trampoline);
 make_webview_event!(NavigatedEvent(&str) -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_NAVIGATED, on_navigated_trampoline, once_navigated_trampoline);
 make_webview_event!(TitleEvent(&str) -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_TITLE, on_title_trampoline, once_title_trampoline);
 make_webview_event!(FaviconEvent(Icon) -> (), SAUCER_WEB_EVENT_SAUCER_WEB_EVENT_FAVICON, on_favicon_trampoline, once_favicon_trampoline);
@@ -390,11 +390,14 @@ extern "C" fn once_navigate_trampoline(
         Box::from_raw(
             arg as *mut (
                 WebviewRef,
-                Rc<RefCell<Option<Box<dyn FnOnce(Webview, WebviewNavigation) -> bool>>>>
+                Rc<RefCell<Option<Box<dyn FnOnce(Webview, &WebviewNavigation) -> bool>>>>
             )
         )
     };
-    let nav = WebviewNavigation::from_ptr(nav);
+    // The navigation handle is cloned, but not its data
+    // Make a borrow here so it's dropped at the end of the trampoline
+    // And make sure that no one can move it out
+    let nav = unsafe { &WebviewNavigation::from_ptr(nav) };
     let rt = do_once_trampoline!(bb; nav; true);
     let _ = Box::into_raw(bb);
     if rt {
@@ -496,11 +499,11 @@ extern "C" fn on_navigate_trampoline(
         Box::from_raw(
             arg as *mut (
                 WebviewRef,
-                Rc<RefCell<Box<dyn FnMut(Webview, WebviewNavigation) -> bool>>>
+                Rc<RefCell<Box<dyn FnMut(Webview, &WebviewNavigation) -> bool>>>
             )
         )
     };
-    let nav = WebviewNavigation::from_ptr(nav);
+    let nav = unsafe { &WebviewNavigation::from_ptr(nav) };
     let rt = do_mut_trampoline!(bb; nav; true);
     let _ = Box::into_raw(bb);
     if rt {

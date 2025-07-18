@@ -22,7 +22,9 @@ impl Drop for WebviewNavigation {
 }
 
 impl WebviewNavigation {
-    pub(crate) fn from_ptr(ptr: *mut saucer_navigation) -> Self {
+    /// SAFETY: This struct has no lifetime specifier and a navigation handle does not own its data. Instances created
+    /// using this method must be dropped before the handle is invalidated.
+    pub(crate) unsafe fn from_ptr(ptr: *mut saucer_navigation) -> Self {
         Self {
             ptr: NonNull::new(ptr).expect("Invalid navigation descriptor"),
             _owns: PhantomData
