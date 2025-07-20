@@ -22,12 +22,14 @@ extern "C"
 
     void saucer_icon_save(saucer_icon *handle, const char *path)
     {
-        handle->value().save(path);
+        auto pt = reinterpret_cast<const char8_t*>(path);
+        handle->value().save(pt);
     }
 
     void saucer_icon_from_file(saucer_icon **result, const char *file)
     {
-        auto icon = saucer::icon::from(file);
+        auto pt = reinterpret_cast<const char8_t*>(file);
+        auto icon = saucer::icon::from(pt);
 
         if (!icon)
         {

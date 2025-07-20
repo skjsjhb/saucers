@@ -27,7 +27,8 @@ extern "C"
 
     void saucer_print_settings_set_file(saucer_print_settings *handle, const char *file)
     {
-        handle->value().file = file;
+        auto pt = reinterpret_cast<const char8_t *>(file);
+        handle->value().file = pt;
     }
 
     void saucer_print_settings_set_orientation(saucer_print_settings *handle, SAUCER_LAYOUT orientation)

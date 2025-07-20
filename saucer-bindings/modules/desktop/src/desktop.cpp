@@ -64,7 +64,7 @@ extern "C"
             return nullptr;
         }
 
-        return bindings::alloc(result->string());
+        return reinterpret_cast<char *>(bindings::alloc(result->u8string()));
     }
 
     char *saucer_desktop_pick_folder(saucer_desktop *handle, saucer_picker_options *options)
@@ -76,7 +76,7 @@ extern "C"
             return nullptr;
         }
 
-        return bindings::alloc(result->string());
+        return reinterpret_cast<char *>(bindings::alloc(result->u8string()));
     }
 
     char **saucer_desktop_pick_files(saucer_desktop *handle, saucer_picker_options *options)
@@ -93,7 +93,7 @@ extern "C"
 
         for (auto i = 0u; result->size() > i; i++)
         {
-            rtn[i] = bindings::alloc(result->at(i).string());
+            rtn[i] = reinterpret_cast<char *>(bindings::alloc(result->at(i).u8string()));
         }
 
         return rtn;
@@ -113,7 +113,7 @@ extern "C"
 
         for (auto i = 0u; result->size() > i; i++)
         {
-            rtn[i] = bindings::alloc(result->at(i).string());
+            rtn[i] = reinterpret_cast<char *>(bindings::alloc(result->at(i).u8string()));
         }
 
         return rtn;
@@ -130,7 +130,7 @@ extern "C"
         auto **rtn = static_cast<char **>(saucer_memory_alloc(count * sizeof(char *)));
 
         for (auto i = 0u; result->size() > i; i++) {
-            rtn[i] = bindings::alloc(result->at(i).string());
+            rtn[i] = reinterpret_cast<char *>(bindings::alloc(result->at(i).u8string()));
         }
 
         *size = count;
@@ -149,7 +149,7 @@ extern "C"
         auto **rtn = static_cast<char **>(saucer_memory_alloc(count * sizeof(char *)));
 
         for (auto i = 0u; result->size() > i; i++) {
-            rtn[i] = bindings::alloc(result->at(i).string());
+            rtn[i] = reinterpret_cast<char *>(bindings::alloc(result->at(i).u8string()));
         }
 
         *size = count;

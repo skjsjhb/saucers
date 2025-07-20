@@ -29,7 +29,8 @@ extern "C"
 
     void saucer_preferences_set_storage_path(saucer_preferences *handle, const char *path)
     {
-        handle->value().storage_path = path;
+        auto pt = reinterpret_cast<const char8_t*>(path);
+        handle->value().storage_path = pt;
     }
 
     void saucer_preferences_add_browser_flag(saucer_preferences *handle, const char *flag)
