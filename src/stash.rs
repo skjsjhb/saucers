@@ -48,7 +48,7 @@ impl<'a> Stash<'a> {
     ///
     /// As stash may be used at any place, the data source must be [`Sync`] to prevent data racing. The stash borrows
     /// the data for its entire lifetime.
-    pub fn view(data: &'a (impl AsRef<[u8]> + Sync + ?Sized)) -> Self {
+    pub fn view(data: impl AsRef<[u8]> + Sync + 'a) -> Self {
         // A stash cannot be modified, but it may be read from other threads and should be `Sync`.
         let ptr = unsafe {
             let data = data.as_ref();
