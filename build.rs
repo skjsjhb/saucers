@@ -71,10 +71,12 @@ fn main() {
         conf.generator_toolset(ev);
     }
 
-    let dst = conf.build();
+    if std::env::var("SAUCERS_SKIP_BUILD").is_err() {
+        let dst = conf.build();
 
-    println!("cargo:rustc-link-search=native={}", dst.display());
-    println!("cargo:rustc-link-search=native={}/lib", dst.display());
+        println!("cargo:rustc-link-search=native={}", dst.display());
+        println!("cargo:rustc-link-search=native={}/lib", dst.display());
+    }
 
     if build_static {
         println!("cargo:rustc-link-lib=static=saucer-bindings");

@@ -46,6 +46,9 @@ This library compiles saucer on-the-fly when building. Additional tools/librarie
 > When building in Cargo, this crate make take noticeable time to compile (several minutes or more) as CMake spends
 > considerable time configuring and compiling saucer (with the C bindings) itself. To speed up compilation, use Ninja
 > and the LLVM toolchain. See [Customize Toolchain](#customize-toolchain) for details.
+>
+> Some IDEs may frequently re-run the build script and lags the build. One can temporarily set `SAUCERS_SKIP_BUILD` to
+> any value to disable invocations to CMake when editing files.
 
 ## Example
 
