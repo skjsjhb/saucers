@@ -71,6 +71,8 @@ fn main() {
         conf.generator_toolset(ev);
     }
 
+    println!("cargo::rerun-if-env-changed=SAUCERS_SKIP_BUILD");
+
     if std::env::var("SAUCERS_SKIP_BUILD").is_err() {
         let dst = conf.build();
 
