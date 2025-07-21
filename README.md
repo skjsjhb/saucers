@@ -49,6 +49,9 @@ This library compiles saucer on-the-fly when building. Additional tools/librarie
 >
 > Some IDEs may frequently re-run the build script and lags the build. One can temporarily set `SAUCERS_SKIP_BUILD` to
 > any value to disable invocations to CMake when editing files.
+>
+> CPM may repeatedly download sources when Cargo decides to change the output directory. To solve this, set
+> `CPM_SOURCE_CACHE` to a path where CPM can cache the source files.
 
 ## Example
 
