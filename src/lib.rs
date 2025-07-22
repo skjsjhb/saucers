@@ -97,3 +97,4 @@ pub mod desktop;
 
 #[cfg(feature = "pdf-mod")]
 pub mod pdf;
+mod util;

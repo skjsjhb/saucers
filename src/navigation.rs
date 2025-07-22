@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use crate::capi::*;
-use crate::macros::ctor;
+use crate::util::take_str;
 
 /// Contains details about a navigation action.
 pub struct WebviewNavigation {
@@ -41,5 +41,5 @@ impl WebviewNavigation {
     pub fn is_user_initiated(&self) -> bool { unsafe { saucer_navigation_user_initiated(self.ptr.as_ptr()) } }
 
     /// Gets the URL that's about to navigate to.
-    pub fn url(&self) -> String { ctor!(free, saucer_navigation_url(self.ptr.as_ptr())) }
+    pub fn url(&self) -> String { take_str(unsafe { saucer_navigation_url(self.ptr.as_ptr()) }).unwrap() }
 }

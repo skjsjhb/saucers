@@ -5,8 +5,8 @@ use std::ptr::NonNull;
 use crate::app::App;
 use crate::capi::*;
 use crate::desktop::PickerOptions;
-use crate::macros::ctor;
 use crate::macros::rtoc;
+use crate::util::take_str;
 
 /// The desktop module providing file picking and URL opening.
 ///
@@ -49,20 +49,12 @@ impl Desktop {
 
     /// Picks a file with the given options.
     pub fn pick_file(&self, opt: &PickerOptions) -> Option<String> {
-        ctor!(
-            free,
-            nullable,
-            saucer_desktop_pick_file(self.ptr.as_ptr(), opt.as_ptr())
-        )
+        take_str(unsafe { saucer_desktop_pick_file(self.ptr.as_ptr(), opt.as_ptr()) })
     }
 
     /// Picks a folder with the given options.
     pub fn pick_folder(&self, opt: &PickerOptions) -> Option<String> {
-        ctor!(
-            free,
-            nullable,
-            saucer_desktop_pick_folder(self.ptr.as_ptr(), opt.as_ptr())
-        )
+        take_str(unsafe { saucer_desktop_pick_folder(self.ptr.as_ptr(), opt.as_ptr()) })
     }
 
     /// Picks multiple files with the given options.
@@ -78,7 +70,7 @@ impl Desktop {
         let mut files = Vec::with_capacity(count);
 
         for i in 0..count {
-            files.push(ctor!(free, *ptr.add(i)));
+            files.push(take_str(unsafe { *ptr.add(i) }).unwrap());
         }
 
         unsafe { saucer_memory_free(ptr as *mut c_void) }
@@ -107,7 +99,7 @@ impl Desktop {
         let mut folders = Vec::with_capacity(count);
 
         for i in 0..count {
-            folders.push(ctor!(free, *ptr.add(i)));
+            folders.push(take_str(unsafe { *ptr.add(i) }).unwrap());
         }
 
         unsafe { saucer_memory_free(ptr as *mut c_void) }

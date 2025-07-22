@@ -8,8 +8,8 @@ use std::rc::Rc;
 
 use crate::capi::*;
 use crate::icon::Icon;
-use crate::macros::ctor;
 use crate::navigation::WebviewNavigation;
+use crate::util::shot_str;
 use crate::webview::Webview;
 use crate::webview::WebviewRef;
 
@@ -408,7 +408,7 @@ extern "C" fn once_navigate_trampoline(
 }
 
 extern "C" fn once_navigated_trampoline(_: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
-    let url = ctor!(url);
+    let url = shot_str(url).unwrap();
     let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Option<Box<dyn FnOnce(Webview, &str)>>>>)) };
     do_once_trampoline!(bb; &url);
     let _ = Box::into_raw(bb);
@@ -516,7 +516,7 @@ extern "C" fn on_navigate_trampoline(
 }
 
 extern "C" fn on_navigated_trampoline(_: *mut saucer_handle, arg: *mut c_void, url: *mut c_char) {
-    let url = ctor!(url);
+    let url = shot_str(url).unwrap();
     let bb = unsafe { Box::from_raw(arg as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, &str)>>>)) };
     do_mut_trampoline!(bb; &url);
     let _ = Box::into_raw(bb);

@@ -18,12 +18,13 @@ use crate::collector::Collect;
 use crate::collector::UnsafeCollector;
 use crate::embed::EmbedFile;
 use crate::icon::Icon;
-use crate::macros::ctor;
 use crate::macros::rtoc;
 use crate::prefs::Preferences;
 use crate::scheme::Executor;
 use crate::scheme::Request;
 use crate::script::Script;
+use crate::util::shot_str;
+use crate::util::take_str;
 
 pub(crate) struct WebviewPtr {
     ptr: NonNull<saucer_handle>,
@@ -209,7 +210,7 @@ extern "C" fn on_message_trampoline(msg: *const c_char, raw: *mut c_void) -> boo
     let bb = unsafe { Box::from_raw(raw as *mut (WebviewRef, Rc<RefCell<Box<dyn FnMut(Webview, &str)>>>)) };
     let rc = (*bb).1.clone();
     if let Some(w) = bb.0.upgrade() {
-        rc.borrow_mut()(w, &ctor!(msg));
+        rc.borrow_mut()(w, &shot_str(msg).unwrap());
     }
     let _ = Box::into_raw(bb); // Avoid dropping the handler
 
@@ -375,13 +376,13 @@ impl Webview {
     pub fn off_message(&self) { self.0.write().unwrap().remove_message_handler(); }
 
     /// Gets the current title of the HTML page in the webview window. Not to be confused with the window title.
-    pub fn page_title(&self) -> String { ctor!(free, saucer_webview_page_title(self.as_ptr())) }
+    pub fn page_title(&self) -> String { take_str(unsafe { saucer_webview_page_title(self.as_ptr()) }).unwrap() }
 
     /// Checks whether DevTools is opened.
     pub fn dev_tools(&self) -> bool { unsafe { saucer_webview_dev_tools(self.as_ptr()) } }
 
     /// Gets the URL of the current page.
-    pub fn url(&self) -> String { ctor!(free, saucer_webview_url(self.as_ptr())) }
+    pub fn url(&self) -> String { take_str(unsafe { saucer_webview_url(self.as_ptr()) }).unwrap() }
 
     /// Gets whether context menu is now enabled.
     pub fn context_menu(&self) -> bool { unsafe { saucer_webview_context_menu(self.as_ptr()) } }
@@ -588,7 +589,7 @@ impl Webview {
     pub fn click_through(&self) -> bool { unsafe { saucer_window_click_through(self.as_ptr()) } }
 
     /// Gets the title of the window.
-    pub fn title(&self) -> String { ctor!(free, saucer_window_title(self.as_ptr())) }
+    pub fn title(&self) -> String { take_str(unsafe { saucer_window_title(self.as_ptr()) }).unwrap() }
 
     /// Gets the size of the window.
     pub fn size(&self) -> (i32, i32) {

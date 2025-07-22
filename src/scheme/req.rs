@@ -4,8 +4,8 @@ use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use crate::capi::*;
-use crate::macros::ctor;
 use crate::stash::Stash;
+use crate::util::take_str;
 
 /// Contains request details of a request to a custom scheme.
 pub struct Request {
@@ -51,8 +51,8 @@ impl Request {
 
         let mut headers = Vec::with_capacity(count);
         for i in 0..count {
-            let k = ctor!(free, *keys.add(i));
-            let v = ctor!(free, *values.add(i));
+            let k = take_str(unsafe { *keys.add(i) }).unwrap();
+            let v = take_str(unsafe { *values.add(i) }).unwrap();
             headers.push((k, v));
         }
 
@@ -65,10 +65,10 @@ impl Request {
     }
 
     /// Gets the request URL.
-    pub fn url(&self) -> String { ctor!(free, saucer_scheme_request_url(self.ptr.as_ptr())) }
+    pub fn url(&self) -> String { take_str(unsafe { saucer_scheme_request_url(self.ptr.as_ptr()) }).unwrap() }
 
     /// Gets the request method.
-    pub fn method(&self) -> String { ctor!(free, saucer_scheme_request_method(self.ptr.as_ptr())) }
+    pub fn method(&self) -> String { take_str(unsafe { saucer_scheme_request_method(self.ptr.as_ptr()) }).unwrap() }
 
     /// Gets the request content.
     ///
