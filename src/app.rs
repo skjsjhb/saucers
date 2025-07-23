@@ -308,13 +308,21 @@ impl App {
 
     pub(crate) fn get_collector(&self) -> Weak<UnsafeCollector> { self.0.collector.as_ref().unwrap().clone() }
 
-    fn downgrade(&self) -> AppRef { AppRef(Arc::downgrade(&self.0)) }
+    pub fn downgrade(&self) -> AppRef { AppRef(Arc::downgrade(&self.0)) }
 }
 
-struct AppRef(Weak<UnsafeApp>);
+/// A weak handle of [`App`].
+///
+/// This struct internally holds a weak reference to the app handle and does not prevent its destruction. This weak
+/// handle must be [`AppRef::upgrade`]ed manually to access the original handle.
+pub struct AppRef(Weak<UnsafeApp>);
 
 impl AppRef {
-    fn upgrade(&self) -> Option<App> { Some(App(self.0.upgrade()?)) }
+    /// Tries to upgrade and get the original handle.
+    ///
+    /// Once upgraded, the returned [`App`] is considered an equivalent to those created via the constructors or
+    /// [`App::clone`] and must be counted when considering dropping.
+    pub fn upgrade(&self) -> Option<App> { Some(App(self.0.upgrade()?)) }
 }
 
 extern "C" fn post_trampoline(raw: *mut c_void) {

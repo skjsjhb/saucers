@@ -706,11 +706,19 @@ impl Webview {
 
     pub(crate) fn is_event_thread(&self) -> bool { self.0.read().unwrap().app.is_thread_safe() }
 
-    pub(crate) fn downgrade(&self) -> WebviewRef { WebviewRef(Arc::downgrade(&self.0)) }
+    pub fn downgrade(&self) -> WebviewRef { WebviewRef(Arc::downgrade(&self.0)) }
 }
 
-pub(crate) struct WebviewRef(pub(crate) Weak<RwLock<UnsafeWebview>>);
+/// A weak handle to a [`Webview`].
+///
+/// Like [`crate::app::AppRef`], this handle does not prevent the original handle from being dropped and needs to be
+/// upgraded manually before using.
+pub struct WebviewRef(Weak<RwLock<UnsafeWebview>>);
 
 impl WebviewRef {
-    pub(crate) fn upgrade(&self) -> Option<Webview> { Some(Webview(self.0.upgrade()?)) }
+    /// Tries to upgrade and get the original handle.
+    ///
+    /// Once upgraded, the returned [`Webview`] is considered an equivalent to those created via the constructors or
+    /// [`Webview::clone`] and must be counted when considering dropping.
+    pub fn upgrade(&self) -> Option<Webview> { Some(Webview(self.0.upgrade()?)) }
 }
