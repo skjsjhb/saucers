@@ -41,5 +41,5 @@ impl WebviewNavigation {
     pub fn is_user_initiated(&self) -> bool { unsafe { saucer_navigation_user_initiated(self.ptr.as_ptr()) } }
 
     /// Gets the URL that's about to navigate to.
-    pub fn url(&self) -> String { take_str(unsafe { saucer_navigation_url(self.ptr.as_ptr()) }).unwrap() }
+    pub fn url(&self) -> String { unsafe { take_str(saucer_navigation_url(self.ptr.as_ptr())).unwrap() } }
 }

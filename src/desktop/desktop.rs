@@ -49,12 +49,12 @@ impl Desktop {
 
     /// Picks a file with the given options.
     pub fn pick_file(&self, opt: &PickerOptions) -> Option<String> {
-        take_str(unsafe { saucer_desktop_pick_file(self.ptr.as_ptr(), opt.as_ptr()) })
+        unsafe { take_str(saucer_desktop_pick_file(self.ptr.as_ptr(), opt.as_ptr())) }
     }
 
     /// Picks a folder with the given options.
     pub fn pick_folder(&self, opt: &PickerOptions) -> Option<String> {
-        take_str(unsafe { saucer_desktop_pick_folder(self.ptr.as_ptr(), opt.as_ptr()) })
+        unsafe { take_str(saucer_desktop_pick_folder(self.ptr.as_ptr(), opt.as_ptr())) }
     }
 
     /// Picks multiple files with the given options.
@@ -70,7 +70,7 @@ impl Desktop {
         let mut files = Vec::with_capacity(count);
 
         for i in 0..count {
-            files.push(take_str(unsafe { *ptr.add(i) }).unwrap());
+            unsafe { files.push(take_str(*ptr.add(i)).unwrap()) }
         }
 
         unsafe { saucer_memory_free(ptr as *mut c_void) }
@@ -99,7 +99,7 @@ impl Desktop {
         let mut folders = Vec::with_capacity(count);
 
         for i in 0..count {
-            folders.push(take_str(unsafe { *ptr.add(i) }).unwrap());
+            unsafe { folders.push(take_str(*ptr.add(i)).unwrap()) }
         }
 
         unsafe { saucer_memory_free(ptr as *mut c_void) }

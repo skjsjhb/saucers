@@ -50,10 +50,12 @@ impl Request {
         }
 
         let mut headers = Vec::with_capacity(count);
-        for i in 0..count {
-            let k = take_str(unsafe { *keys.add(i) }).unwrap();
-            let v = take_str(unsafe { *values.add(i) }).unwrap();
-            headers.push((k, v));
+        unsafe {
+            for i in 0..count {
+                let k = take_str(*keys.add(i)).unwrap();
+                let v = take_str(*values.add(i)).unwrap();
+                headers.push((k, v));
+            }
         }
 
         unsafe {
@@ -65,10 +67,10 @@ impl Request {
     }
 
     /// Gets the request URL.
-    pub fn url(&self) -> String { take_str(unsafe { saucer_scheme_request_url(self.ptr.as_ptr()) }).unwrap() }
+    pub fn url(&self) -> String { unsafe { take_str(saucer_scheme_request_url(self.ptr.as_ptr())).unwrap() } }
 
     /// Gets the request method.
-    pub fn method(&self) -> String { take_str(unsafe { saucer_scheme_request_method(self.ptr.as_ptr()) }).unwrap() }
+    pub fn method(&self) -> String { unsafe { take_str(saucer_scheme_request_method(self.ptr.as_ptr())).unwrap() } }
 
     /// Gets the request content.
     ///
