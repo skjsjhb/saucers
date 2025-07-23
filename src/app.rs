@@ -315,6 +315,7 @@ impl App {
 ///
 /// This struct internally holds a weak reference to the app handle and does not prevent its destruction. This weak
 /// handle must be [`AppRef::upgrade`]ed manually to access the original handle.
+#[derive(Clone)]
 pub struct AppRef(Weak<UnsafeApp>);
 
 impl AppRef {

@@ -713,6 +713,7 @@ impl Webview {
 ///
 /// Like [`crate::app::AppRef`], this handle does not prevent the original handle from being dropped and needs to be
 /// upgraded manually before using.
+#[derive(Clone)]
 pub struct WebviewRef(Weak<RwLock<UnsafeWebview>>);
 
 impl WebviewRef {
