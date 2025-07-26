@@ -37,7 +37,6 @@ This library compiles saucer on-the-fly when building. Additional tools/librarie
     - AppleClang 15+
     - MSVC 19.38+
     - Clang 17+ (When used as `clang-cl` on Windows)
-- Clang 9+ or corresponding `libclang` (for `bindgen`).
 - Make sure to have [system dependencies](https://saucer.app/docs/getting-started/dependencies) installed.
 - CMake.
 - When building for Windows, MSVC is required (MinGW has been verified not to work with WinRT libraries like WRL).
@@ -245,6 +244,12 @@ Qt backends are of secondary support (comparing to system native webview) with t
 - Runtime libraries and resources are not handled automatically.
 - Even saucer is statically linked, Qt libraries are still dynamically linked.
 - Downgraded performance in debug mode.
+
+## Generate Bindings
+
+This library comes with prebuilt bindings generated using `bindgen`, shipped with the sources. As a cross-platform
+library, the C API of saucer is very stable for such distribution method. To generate bindings from C headers at build
+time, install Clang first, then build with feature `gen-bindings` enabled.
 
 ## Known Limitations
 

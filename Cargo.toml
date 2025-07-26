@@ -34,6 +34,7 @@ bench = false
 
 [features]
 default = ["static-lib", "desktop-mod", "pdf-mod"]
+gen-bindings = []
 qt5 = []
 qt6 = []
 static-lib = []

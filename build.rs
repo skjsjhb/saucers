@@ -193,6 +193,10 @@ fn main() {
 
     println!("cargo:rerun-if-changed=saucer-bindings/CMakeLists.txt");
 
+    if std::env::var("CARGO_FEATURE_GEN_BINDINGS").is_err() {
+        return;
+    }
+
     let mut header = std::fs::read_to_string("saucer-bindings/include/saucer/all.rs.h").unwrap();
 
     if has_desktop_mod {
