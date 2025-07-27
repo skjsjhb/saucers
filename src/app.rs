@@ -280,8 +280,7 @@ impl App {
     /// Like [`Self::post`], this method makes no guarantee on when the closure will be called. However, unlike
     /// [`Self::post`], this method does not reject the closure based on the status of the thread pool, means that
     /// content captured by the closure might be leaked forever, sometimes even likely. Such possibility are not guarded
-    /// or reduced, even in attempts, by this method. Given the description above, it's **absolutely discouraged** to
-    /// capture any handle inside the closure without [`Weak`], unless for very specific valid use case.
+    /// or reduced, even in attempts, by this method.
     ///
     /// # Deprecation Notes
     ///
@@ -298,8 +297,6 @@ impl App {
     /// Runs a closure in the background thread pool and returns immediately.
     ///
     /// All caveats of [`Self::pool_submit`], including the drop limitations of the closure, also apply to this method.
-    /// Beyond that, as it's impossible to control when the thread is started or terminated, it's almost **NEVER** a
-    /// good idea to capture any handles in it, **even using [`Weak`]**.
     ///
     /// # Deprecation Notes
     ///

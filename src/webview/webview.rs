@@ -293,7 +293,7 @@ impl From<WindowEdge> for SAUCER_WINDOW_EDGE {
 /// app, see
 ///
 /// Like [`App`], capturing a webview handle in various handlers can lead to circular references easily and will block
-/// the underlying resources from being freed. It's advised to use [`Weak`] to prevent directly capturing a handle.
+/// the underlying resources from being freed. It's advised to use [`WebviewRef`] instead.
 ///
 /// # A [`Webview`] Is an [`App`]
 ///
@@ -374,8 +374,8 @@ impl Webview {
     ///
     /// Like [`App::post`], capturing any handles in the message handler may result in circular references and prevent
     /// them from being dropped correctly. Either use the passed argument directly without capturing, or consider
-    /// wrapping them with [`Weak`] if other handles are needed. Alternatively, use [`Self::off_message`] to remove the
-    /// handler manually.
+    /// using the corresponding [`crate::app::AppRef`] or [`WebviewRef`]. Alternatively, use [`Self::off_message`] to
+    /// remove the handler manually.
     ///
     /// # Panics
     ///
