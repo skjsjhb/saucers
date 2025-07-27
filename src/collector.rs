@@ -26,10 +26,12 @@ unsafe impl Sync for UnsafeCollector {}
 impl Drop for UnsafeCollector {
     fn drop(&mut self) {
         self.try_collect();
+
         let unfreed = Arc::strong_count(&self.counter) - 1;
-        if unfreed > 0 {
-            panic!("Unfreed handles detected (total {unfreed}). Consider drop this collector later.");
-        }
+        debug_assert_eq!(
+            unfreed, 0,
+            "Unfreed handles detected (total {unfreed}). Consider dropping this collector later."
+        );
     }
 }
 
@@ -91,14 +93,20 @@ pub(crate) trait Collect: Send + Sync {
 /// with a message like:
 ///
 /// ```text
-/// Unfreed handles detected (total X). Consider drop this collector later.
+/// Unfreed handles detected (total X). Consider dropping this collector later.
 /// ```
 ///
-/// Note that this behavior can also be useful to detect circular references.
+/// One of the main cause of such a panic is **capturing handles** like [`crate::app::App`] and
+/// [`crate::webview::Webview`] in their event handlers. These handles are highly close to self-referential and will
+/// almost always form one if a handle is captured. Replace captured handles with [`crate::app::AppRef`] or
+/// [`crate::webview::WebviewRef`] should solve this.
+///
+/// This check is only done when the program is built in debug mode, since leaking handles is not fundamentally unsafe,
+/// but one would generally want to discover them in the early stage.
 ///
 /// # Panics
 ///
-/// As described above, panics when there are remaining handlers when being dropped.
+/// As described above, in debug mode, panics when there are remaining handlers when being dropped.
 ///
 /// # Example
 ///

@@ -35,10 +35,10 @@ pub(crate) struct WebviewPtr {
     _owns: PhantomData<saucer_handle>,
     _counter: Arc<()>,
 
-    pub(in crate::webview) dyn_event_droppers: HashMap<(u32, u64), Box<dyn FnOnce() + 'static>>,
+    pub(super) dyn_event_droppers: HashMap<(u32, u64), Box<dyn FnOnce() + 'static>>,
 
     // A pair of (checker, dropper), checker returns whether the dropper can be removed
-    pub(in crate::webview) once_event_droppers: Vec<(Box<dyn FnMut() -> bool + 'static>, Box<dyn FnOnce() + 'static>)>
+    pub(super) once_event_droppers: Vec<(Box<dyn FnMut() -> bool + 'static>, Box<dyn FnOnce() + 'static>)>
 }
 
 unsafe impl Send for WebviewPtr {}
@@ -81,6 +81,14 @@ pub(crate) struct UnsafeWebview {
 
 impl Drop for UnsafeWebview {
     fn drop(&mut self) {
+        // Dropping the unsafe webview is a complex task and may cause UB in multiple ways. Basically, unsafe webviews
+        // are only safe to be dropped on the event thread and not in any currently active handler. The latter is due
+        // to the fact that the event manager in the C++ part will sometimes need to use the event, so the webview must
+        // be alive during its lifetime and the C++ wrapper.
+        // This challenge is solved by explicitly storing webviews in their apps so that the event handler can ensure
+        // the webview won't be dropped inside it. The app should be able to clean the webviews upon dropped with some
+        // counting. We then require users to explicitly use an unsafe method to remove the webview if needed.
+
         let bb = Box::new(self.ptr.take().unwrap());
 
         if self.app.is_thread_safe() {
@@ -266,21 +274,23 @@ impl From<WindowEdge> for SAUCER_WINDOW_EDGE {
 /// webview must be created using the [`Webview::new`] constructor. Similarly, dropping a webview handle does not destroy
 /// the window or its web contents, unless it's the last handle present in the process.
 ///
-/// Note that the webview window is destroyed when the last handle referring to it is dropped:
+/// It should be noted that, a webview internally hooks itself into the [`App`] upon creation, thus the handlers you
+/// can see may not be the full set. For example:
 ///
-/// ```no_run
+/// ```
 /// use saucers::app::App;
 /// use saucers::prefs::Preferences;
 /// use saucers::webview::Webview;
 ///
 /// fn early_destroyed(app: App) {
-///     let w = Webview::new(&Preferences::new(&app));
-///     // Oh, no! The webview is dropped here and the window is destroyed!
-///     // drop(w);
+///     drop(Webview::new(&Preferences::new(&app)));
+///     // Window will still be open here, as the app stores a handle.
 /// }
 /// ```
 ///
-/// It's up to the user to keep at least one handle during the expected lifetime of the webview.
+/// The app itself clears the references when all external handles (i.e. not including hooked webviews) of it are
+/// dropped. i.e. All webviews will be destroyed when the app is dropped as-is. To destroy a webview earlier than the
+/// app, see
 ///
 /// Like [`App`], capturing a webview handle in various handlers can lead to circular references easily and will block
 /// the underlying resources from being freed. It's advised to use [`Weak`] to prevent directly capturing a handle.
@@ -341,7 +351,11 @@ impl Webview {
     ///
     /// The newly created webview handle stores a clone of the app handle internally. This can cause issues with
     /// dropping. See [`Webview`] for details.
-    pub fn new(pref: &Preferences) -> Option<Self> { Some(Webview(Arc::new(RwLock::new(UnsafeWebview::new(pref)?)))) }
+    pub fn new(pref: &Preferences) -> Option<Self> {
+        let this = Webview(Arc::new(RwLock::new(UnsafeWebview::new(pref)?)));
+        pref.get_app().add_webview(this.clone());
+        Some(this)
+    }
 
     /// Sets a handler for messages from the webview context. Only one handler can be set at a time. Setting a new one
     /// will replace the previous one. This method must be called on the event thread.
@@ -692,7 +706,7 @@ impl Webview {
     /// Limitations and caveats of [`App::post`] also apply to this method. See the docs there for details.
     pub fn post(&self, fun: impl FnOnce(App, Webview) + Send + 'static) {
         let wk = self.downgrade();
-        self.0.read().unwrap().app.post(move |a| {
+        self.app().post(move |a| {
             if let Some(w) = wk.upgrade() {
                 fun(a, w)
             }
@@ -702,10 +716,39 @@ impl Webview {
     /// Clones a handle of the [`App`] referenced by this webview window.
     pub fn app(&self) -> App { self.0.read().unwrap().app.clone() }
 
+    /// Removes the webview instance from the app it belongs to. Useful for fully destroying a webview window in a
+    /// long-running app.
+    ///
+    /// # Safety
+    ///
+    /// This method is unsafe because [`Webview`] handles are effectively [`Arc`]s to the underlying unsafe handle. If
+    /// the app no longer manages the webview, then whoever holds the last [`Webview`] will have no choice but to drop
+    /// it there. The problem is, the handle is not safe to be dropped at any place. To drop the handle safely, the
+    /// following conditions must be met:
+    ///
+    /// 1. It's dropped on the event thread.
+    /// 2. It's not dropped in a scheme handler, a message handler or an event handler.
+    /// 3. It's dropped before its app.
+    ///
+    /// Condition 1 is guarded in the [`Drop`] implementation and will leverage [`crate::collector::Collector`] if
+    /// dropped on another thread. However, there is currently no reliable way to detect whether the code is inside a
+    /// handler (due to the fact that handlers can be removed and app event loops can be started inside handlers).
+    /// Similarly, there is no way to stop the [`App`] from being dropped without involving potential risk of circular
+    /// references.
+    ///
+    /// Thus, the user is fully responsible for **not dropping the last [`Webview`] in any handler** and webviews **must
+    /// be dropped before their [`App`]**. Both will always be guarded if the webview is managed by the app
+    /// (as the app can only be dropped when the event loop is not running, which guarantees that we're not in a
+    /// handler). When this method is called, such responsibility is transferred to the user. Note that this method by
+    /// itself is not always unsound to be called inside the handler, what matters is the place where the last
+    /// [`Webview`] is dropped.
+    pub unsafe fn unref(&self) { unsafe { self.app().unref_webview(self) } }
+
     pub(crate) fn as_ptr(&self) -> *mut saucer_handle { self.0.read().unwrap().as_ptr() }
 
-    pub(crate) fn is_event_thread(&self) -> bool { self.0.read().unwrap().app.is_thread_safe() }
+    pub(crate) fn is_event_thread(&self) -> bool { self.app().is_thread_safe() }
 
+    /// Gets a weak [`WebviewRef`] of this webview.
     pub fn downgrade(&self) -> WebviewRef { WebviewRef(Arc::downgrade(&self.0)) }
 }
 

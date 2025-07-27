@@ -1,10 +1,13 @@
 //! Application event cycle module.
 //!
 //! See [`App`] for details.
+
 use std::ffi::c_void;
 use std::marker::PhantomData;
+use std::mem::take;
 use std::ptr::NonNull;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::RwLock;
 use std::sync::Weak;
 use std::sync::atomic::AtomicBool;
@@ -17,6 +20,7 @@ use crate::collector::Collect;
 use crate::collector::Collector;
 use crate::collector::UnsafeCollector;
 use crate::options::AppOptions;
+use crate::webview::Webview;
 
 struct ReplaceableAppPtr(RwLock<Option<NonNull<saucer_application>>>);
 
@@ -48,12 +52,13 @@ impl Collect for AppPtr {
     }
 }
 
-struct UnsafeApp {
+pub(crate) struct UnsafeApp {
     ptr: Option<AppPtr>,
     collector: Option<Weak<UnsafeCollector>>,
     collector_tx: Sender<Box<dyn Collect>>,
     stopped: AtomicBool,
     host_thread: ThreadId,
+    webviews: Mutex<Vec<Webview>>,
     _opt: AppOptions
 }
 
@@ -91,6 +96,7 @@ impl UnsafeApp {
             collector_tx: collector.get_sender(),
             stopped: AtomicBool::new(false),
             host_thread: std::thread::current().id(),
+            webviews: Mutex::default(),
             _opt: opt
         }
     }
@@ -127,9 +133,23 @@ impl UnsafeApp {
 /// unless it's the last handle present in the process.
 ///
 /// Capturing an app handle in various handlers can lead to circular references easily and will block the underlying
-/// resources from being freed. It's advised to use [`Weak`] to prevent directly capturing a handle.
+/// resources from being freed. Prefer using [`AppRef`] than directly capturing a handle.
 #[derive(Clone)]
-pub struct App(Arc<UnsafeApp>);
+pub struct App(pub(crate) Arc<UnsafeApp>);
+
+impl Drop for App {
+    fn drop(&mut self) {
+        let mut ws = self.0.webviews.lock().unwrap();
+        if Arc::strong_count(&self.0) <= ws.len() + 1 {
+            // The app only has interior references, clear the webviews.
+            // As dropping the webview handle may result in dropping the app, we first take the value out, drop the
+            // mutex guard, then clear each webview.
+            let w = take(&mut *ws);
+            drop(ws);
+            drop(w);
+        }
+    }
+}
 
 impl App {
     /// Creates a new app and returns a handle for it, using the given options.
@@ -175,8 +195,8 @@ impl App {
     /// # Don't Capture Handles
     ///
     /// Capturing any handles in the closure, including [`App`] and other handles that rely on it, may create circular
-    /// references and block other handles from being dropped correctly. It's **highly discouraged** to capture any
-    /// handles in the provided closure without using [`Weak`].
+    /// references and block other handles from being dropped correctly. Always prefer using [`AppRef`] to share handles
+    /// across closures.
     ///
     /// # Performance Concerns
     ///
@@ -304,10 +324,17 @@ impl App {
         }
     }
 
+    pub(crate) fn add_webview(&self, w: Webview) { self.0.webviews.lock().unwrap().push(w); }
+
+    pub(crate) unsafe fn unref_webview(&self, w: &Webview) {
+        self.0.webviews.lock().unwrap().retain(|wi| wi.as_ptr() != w.as_ptr());
+    }
+
     pub(crate) fn as_ptr(&self) -> *mut saucer_application { self.0.as_ptr() }
 
     pub(crate) fn get_collector(&self) -> Weak<UnsafeCollector> { self.0.collector.as_ref().unwrap().clone() }
 
+    /// Gets a weak [`AppRef`] of this app.
     pub fn downgrade(&self) -> AppRef { AppRef(Arc::downgrade(&self.0)) }
 }
 
