@@ -1,8 +1,0 @@
-#pragma once
-
-@INCLUDE_SERIALIZER@
-
-namespace saucer
-{
-    using default_serializer = @DEFAULT_SERIALIZER@;
-}
