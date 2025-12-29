@@ -1,0 +1,8 @@
+build
+**/export.h
+src/native.mm
+private/version.hpp
+
+.vs
+.cache
+.vscode

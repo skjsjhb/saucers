@@ -1,0 +1,86 @@
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      ref:
+        type: string
+        default: master
+        description: The ref of saucer to use
+
+name: 🏗️ Build Bindings
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+
+      matrix:
+        backend: [WebKit, WebKitGtk, WebView2, WebView2-Rfl, WebView2-Hack, WebView2-Hack-Rfl, Qt]
+        config: [Debug, Release, RelWithDebInfo, MinSizeRel]
+
+        include:
+          - backend: WebView2
+            platform: Windows
+            os: windows-latest
+
+          - backend: WebView2-Rfl
+            backend-override: WebView2
+            platform: Windows
+            os: windows-latest
+            cmake-args: -Dsaucer_serializer=Rflpp
+
+          - backend: WebView2-Hack
+            backend-override: WebView2
+            platform: Windows
+            os: windows-latest
+            cmake-args: -Dsaucer_msvc_hack=ON
+
+          - backend: WebView2-Hack-Rfl
+            backend-override: WebView2
+            platform: Windows
+            os: windows-latest
+            cmake-args: -Dsaucer_msvc_hack=ON -Dsaucer_serializer=Rflpp
+
+          - backend: Qt
+            platform: Linux
+            os: ubuntu-latest
+            container: archlinux:base-devel
+
+          - backend: WebKitGtk
+            platform: Linux
+            os: ubuntu-latest
+            container: archlinux:base-devel
+
+          - backend: WebKit
+            platform: MacOS
+            os: macos-latest
+
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    name: bindings-${{ matrix.backend }}-${{ matrix.config }}
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 📥 Checkout Saucer
+        uses: actions/checkout@v4
+        with:
+          repository: "saucer/saucer"
+          sparse-checkout: ".github"
+          path: "actions"
+          ref: ${{ github.event.inputs.ref || 'master' }}
+
+      - name: 🛸 Setup Saucer
+        uses: ./actions/.github/actions/setup
+        with:
+          backend: ${{ matrix.backend-override || matrix.backend }}
+          platform: ${{ matrix.platform }}
+          build-type: ${{ matrix.config }}
+          cmake-args: ${{ matrix.cmake-args }}
+
+      - name: 📦 Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Binding (${{ matrix.backend }}-${{ matrix.config }})
+          path: build
