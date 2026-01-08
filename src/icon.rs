@@ -1,18 +1,18 @@
 //! Native icon module.
 //!
 //! See [`Icon`] for details.
-use std::ffi::CString;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
-use std::ptr::null_mut;
 
-use crate::capi::*;
+use saucer_sys::*;
+
+use crate::macros::use_string;
 use crate::stash::Stash;
 
-/// A handler for native icon data. This handle can be used to exchange icon data with webview.
+/// A native icon.
 pub struct Icon {
     ptr: NonNull<saucer_icon>,
-    _owns: PhantomData<saucer_icon>
+    _marker: PhantomData<saucer_icon>,
 }
 
 unsafe impl Send for Icon {}
@@ -22,44 +22,49 @@ impl Drop for Icon {
     fn drop(&mut self) { unsafe { saucer_icon_free(self.ptr.as_ptr()) } }
 }
 
-impl Icon {
-    /// SAFETY: This struct has no lifetime specifier and an icon handle does not own its data. Instances created
-    /// using this method must be dropped before the handle is invalidated.
-    pub(crate) unsafe fn from_ptr(ptr: *mut saucer_icon) -> Self {
+impl Clone for Icon {
+    fn clone(&self) -> Self {
+        let ptr = unsafe { saucer_icon_copy(self.as_ptr()) };
         Self {
-            ptr: NonNull::new(ptr).expect("Invalid icon data"),
-            _owns: PhantomData
+            ptr: NonNull::new(ptr).expect("copied icon should be non-null"),
+            _marker: PhantomData,
         }
+    }
+}
+
+impl AsRef<Icon> for Icon {
+    fn as_ref(&self) -> &Icon { self }
+}
+
+impl Icon {
+    pub(crate) unsafe fn from_ptr(ptr: *mut saucer_icon) -> Self {
+        let ptr = NonNull::new(ptr).expect("icon ptr should be non-null");
+        Self { ptr, _marker: PhantomData }
     }
 
     /// Loads an icon from the given file.
-    pub fn from_file(fp: impl AsRef<str>) -> Option<Icon> {
-        let mut ptr: *mut saucer_icon = null_mut();
-        let cst = CString::new(fp.as_ref()).unwrap();
-        unsafe {
-            saucer_icon_from_file(&mut ptr as *mut *mut saucer_icon, cst.as_ptr());
-        }
-        if ptr.is_null() {
-            None
-        } else {
-            // SAFETY: Data created using `from` is owning
-            Some(unsafe { Icon::from_ptr(ptr) })
-        }
+    pub fn from_file(fp: impl Into<Vec<u8>>) -> crate::error::Result<Self> {
+        let mut ex = -1;
+        let ptr = use_string!(
+            fp: fp;
+            unsafe { saucer_icon_new_from_file(fp, &raw mut ex) }
+        );
+
+        let ptr = NonNull::new(ptr).ok_or(crate::error::Error::Saucer(ex))?;
+
+        Ok(Self { ptr, _marker: PhantomData })
     }
 
     /// Loads an icon from the given [`Stash`].
-    pub fn from_data(stash: &Stash<'_>) -> Option<Icon> {
-        let mut ptr: *mut saucer_icon = null_mut();
-        unsafe {
+    pub fn from_data(stash: &Stash) -> crate::error::Result<Self> {
+        let mut ex = -1;
+        let ptr = unsafe {
             // Data copied internally in C
-            saucer_icon_from_data(&mut ptr as *mut *mut saucer_icon, stash.as_ptr());
-        }
-        if ptr.is_null() {
-            None
-        } else {
-            // SAFETY: Data created using `from` is owning
-            Some(unsafe { Icon::from_ptr(ptr) })
-        }
+            saucer_icon_new_from_stash(stash.as_ptr(), &raw mut ex)
+        };
+
+        let ptr = NonNull::new(ptr).ok_or(crate::error::Error::Saucer(ex))?;
+        Ok(Self { ptr, _marker: PhantomData })
     }
 
     /// Checks whether the icon is empty.
@@ -74,9 +79,8 @@ impl Icon {
     }
 
     /// Saves the icon to the specified file.
-    pub fn save(&self, fp: impl AsRef<str>) {
-        let cst = CString::new(fp.as_ref()).unwrap();
-        unsafe { saucer_icon_save(self.ptr.as_ptr(), cst.as_ptr()) }
+    pub fn save(&self, fp: impl Into<Vec<u8>>) {
+        use_string!(fp: fp; unsafe { saucer_icon_save(self.as_ptr(), fp) })
     }
 
     pub(crate) fn as_ptr(&self) -> *mut saucer_icon { self.ptr.as_ptr() }

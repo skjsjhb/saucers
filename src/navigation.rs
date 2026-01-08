@@ -1,45 +1,49 @@
 //! Webview navigation descriptor module.
 //!
-//! See [`WebviewNavigation`] for details.
+//! See [`Navigation`] for details.
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
-use crate::capi::*;
-use crate::util::take_str;
+use saucer_sys::*;
 
-/// Contains details about a navigation action.
-pub struct WebviewNavigation {
+use crate::url::Url;
+
+/// A navigation descriptor.
+pub struct Navigation<'a> {
     ptr: NonNull<saucer_navigation>,
-    _owns: PhantomData<saucer_navigation>
+    _marker: PhantomData<&'a saucer_navigation>,
 }
 
-unsafe impl Send for WebviewNavigation {}
+unsafe impl Send for Navigation<'_> {}
+unsafe impl Sync for Navigation<'_> {}
 
-unsafe impl Sync for WebviewNavigation {}
-
-impl Drop for WebviewNavigation {
-    fn drop(&mut self) { unsafe { saucer_navigation_free(self.ptr.as_ptr()) } }
-}
-
-impl WebviewNavigation {
-    /// SAFETY: This struct has no lifetime specifier and a navigation handle does not own its data. Instances created
-    /// using this method must be dropped before the handle is invalidated.
+impl Navigation<'_> {
+    /// SAFETY: The provided pointer must outlive the returned struct.
     pub(crate) unsafe fn from_ptr(ptr: *mut saucer_navigation) -> Self {
         Self {
-            ptr: NonNull::new(ptr).expect("Invalid navigation descriptor"),
-            _owns: PhantomData
+            ptr: NonNull::new(ptr).expect("invalid navigation descriptor"),
+            _marker: PhantomData,
         }
     }
 
     /// Checks whether the navigation requests a new window to be created.
-    pub fn is_new_window(&self) -> bool { unsafe { saucer_navigation_new_window(self.ptr.as_ptr()) } }
+    pub fn is_new_window(&self) -> bool {
+        unsafe { saucer_navigation_new_window(self.ptr.as_ptr()) }
+    }
 
     /// Checks whether the navigation is initiated by a redirection.
-    pub fn is_redirection(&self) -> bool { unsafe { saucer_navigation_redirection(self.ptr.as_ptr()) } }
+    pub fn is_redirection(&self) -> bool {
+        unsafe { saucer_navigation_redirection(self.ptr.as_ptr()) }
+    }
 
     /// Checks whether the navigation is initiated by user actions.
-    pub fn is_user_initiated(&self) -> bool { unsafe { saucer_navigation_user_initiated(self.ptr.as_ptr()) } }
+    pub fn is_user_initiated(&self) -> bool {
+        unsafe { saucer_navigation_user_initiated(self.ptr.as_ptr()) }
+    }
 
     /// Gets the URL that's about to navigate to.
-    pub fn url(&self) -> String { unsafe { take_str(saucer_navigation_url(self.ptr.as_ptr())).unwrap() } }
+    pub fn url(&self) -> Url {
+        let ptr = unsafe { saucer_navigation_url(self.ptr.as_ptr()) };
+        unsafe { Url::from_ptr(ptr, -1) }.expect("navigation URL should be present")
+    }
 }

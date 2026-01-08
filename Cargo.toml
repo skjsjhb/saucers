@@ -1,42 +1,30 @@
 [package]
 name = "saucers"
 description = "Rust bindings for saucer, the C++ webview library."
-version = "0.3.0-6.0.1"
+version = "0.5.0-8.0.0"
 edition = "2024"
 license = "MIT"
 homepage = "https://github.com/skjsjhb/saucers"
 repository = "https://github.com/skjsjhb/saucers"
 readme = "README.md"
+rust-version = "1.92.0"
 exclude = [
-    ".cargo/**/*",
     "**/.github/**/*",
     "rust-toolchain.toml",
     ".gitattributes"
 ]
 
+[dependencies]
+thiserror = "2.0.17"
+saucer-sys = { git = "https://github.com/skarl3t/saucer-sys", rev = "e8523a5" }
+
 [build-dependencies]
-bindgen = "0.72.0"
-cmake = "0.1"
-pkg-config = "0.3.32"
-
-[[bin]]
-name = "app-test-exec"
-path = "src/bin/app_test.rs"
-doc = false
-
-[[bin]]
-name = "webview-test-exec"
-path = "src/bin/webview_test.rs"
-doc = false
+build-target = "0.8.0"
 
 [lib]
 bench = false
 
 [features]
-default = ["static-lib", "desktop-mod", "pdf-mod"]
-gen-bindings = []
-qt5 = []
-qt6 = []
-static-lib = []
-desktop-mod = []
-pdf-mod = []
+gen-bindings = ["saucer-sys/gen-bindings"]
+qt = ["saucer-sys/qt"]
+lto = ["saucer-sys/lto"]

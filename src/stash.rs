@@ -5,23 +5,25 @@ use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
-use crate::capi::*;
+use saucer_sys::*;
 
 /// An immutable interface to interact with binary data.
 ///
-/// A stash can either own its data, or borrows data defined elsewhere. An owning stash manages its data internally and
-/// has a static lifetime. A borrowed stash, on the other hand, acts like a shared reference to the data with the
-/// specified lifetime.
+/// A stash can own its data, borrow data defined elsewhere, or provide a lazy callback that's
+/// evaluated on the first access.
+///
+/// Stashes are [`Send`] but ![`Sync`], since accessing the data may evaluate the callback, which
+/// is not protected among threads in the C API.
 pub struct Stash<'a> {
     ptr: NonNull<saucer_stash>,
-    /// When set to true, does not free the stash when this handle is dropped. This is required to transfer the inner
-    /// stash object to the C API.
+    /// When set to true, does not free the stash when this handle is dropped. This is required to
+    /// transfer the inner stash object to the C API.
     leak: bool,
-    _owns: PhantomData<(saucer_stash, &'a ())>
+    _marker: PhantomData<(saucer_stash, &'a ())>,
 }
 
 unsafe impl Send for Stash<'_> {}
-unsafe impl Sync for Stash<'_> {}
+// !Sync since polling a lazy stash on multiple threads is unsound.
 
 impl Drop for Stash<'_> {
     fn drop(&mut self) {
@@ -31,30 +33,73 @@ impl Drop for Stash<'_> {
     }
 }
 
+impl Default for Stash<'_> {
+    fn default() -> Self { Self::new_empty() }
+}
+
+// We can't give Clone even the stash is !Sync, since when two stashes share the same underlying
+// callback and value cache, having multiple handles without synchronization (which unfortunately is
+// the case in saucer) would make it unsound. Disabling cloning shall solve this, as saucer does not
+// internally poll a stash on multiple threads (at least not at the API level).
+#[cfg(false)]
+impl Clone for Stash<'_> {
+    fn clone(&self) -> Self {
+        // Lazy stashes shares the same underlying callback and value cache.
+        let ptr = unsafe { saucer_stash_copy(self.as_ptr()) };
+        Self::from_ptr(ptr)
+    }
+}
+
 impl Stash<'_> {
     pub(crate) fn from_ptr(ptr: *mut saucer_stash) -> Self {
         Self {
-            ptr: NonNull::new(ptr).expect("Invalid stash data"),
+            ptr: NonNull::new(ptr).expect("invalid stash ptr"),
             leak: false,
-            _owns: PhantomData
+            _marker: PhantomData,
         }
     }
 
     pub(crate) fn as_ptr(&self) -> *mut saucer_stash { self.ptr.as_ptr() }
+
+    /// Creates an empty stash.
+    pub fn new_empty() -> Self { Self::from_ptr(unsafe { saucer_stash_new_empty() }) }
+
+    /// Creates a new stash by copying the given data.
+    pub fn new_copy(data: impl AsRef<[u8]>) -> Self {
+        let data = data.as_ref();
+        // Data copied internally
+        let ptr = unsafe { saucer_stash_new_from(data.as_ptr() as *mut u8, data.len()) };
+
+        Self::from_ptr(ptr)
+    }
+
+    /// Creates a lazy-populated stash whose content is populated by evaluating the populator on
+    /// demand.
+    ///
+    /// The provided populator is polled at most once when reading the stash and will drop itself
+    /// after the invocation. However, a stash may be dropped without being read, and the content of
+    /// the populator is then leaked. Given such limitation, unless the usage of the stash can be
+    /// known in advance (like feeding a [`crate::scheme::Response`]), usage of this method is
+    /// discouraged.
+    ///
+    /// Despite the above limitations, this method can be useful to create a stash that "carries"
+    /// owned data, but without copying or the need of explicitly moving data with a borrowed stash.
+    pub fn new_lazy(populator: impl FnOnce() -> Stash<'static> + Send + 'static) -> Self {
+        // A lazy stash internally caches the value and will call the populator at most once.
+        // However, it's uncertain when it will be called, thus Send + 'static. The returned stash
+        // may also be used for unknown lifetime, thus 'static.
+        let data = LazyCallbackData { callback: Box::new(populator) };
+        let data = Box::into_raw(Box::new(data)) as *mut c_void;
+        let ptr = unsafe { saucer_stash_new_lazy(Some(stash_lazy_tp), data) };
+
+        Self::from_ptr(ptr)
+    }
 }
 
 impl<'a> Stash<'a> {
     /// Creates a new stash that borrows the given data.
-    ///
-    /// As stash may be used at any place, the data source must be [`Sync`] to prevent data racing. The stash borrows
-    /// the data for its entire lifetime.
-    pub fn view(data: impl AsRef<[u8]> + Sync + 'a) -> Self {
-        // A stash cannot be modified, but it may be read from other threads and should be `Sync`.
-        let ptr = unsafe {
-            let data = data.as_ref();
-            saucer_stash_view(data.as_ptr(), data.len())
-        };
-
+    pub fn new_view(data: &'a [u8]) -> Self {
+        let ptr = unsafe { saucer_stash_new_view(data.as_ptr(), data.len()) };
         Self::from_ptr(ptr)
     }
 
@@ -64,52 +109,25 @@ impl<'a> Stash<'a> {
     /// Returns the inner data.
     pub fn data(&self) -> &[u8] {
         // Each stash should have a non-null data pointer (empty stashes have empty vectors).
-        // Borrowed stashes can only be created by user and all references should be nonnull in Rust.
+        // Borrowed stashes can only be created by user and all references should be nonnull in
+        // Rust.
         let ptr = unsafe { saucer_stash_data(self.ptr.as_ptr()) };
         unsafe { std::slice::from_raw_parts(ptr, self.size()) }
     }
 }
 
-impl Stash<'static> {
-    /// Creates a new stash by copying the given data.
-    pub fn copy(data: impl AsRef<[u8]>) -> Self {
-        let r = data.as_ref();
-        let ptr = unsafe { saucer_stash_from(r.as_ptr(), r.len()) };
-
-        Self::from_ptr(ptr)
-    }
-
-    /// Creates a lazy-populated stash whose content is populated by evaluating the populator on demand.
-    ///
-    /// The provided populator is polled at most once when reading the stash. It also drops everything it owns when
-    /// being called. However, a stash may be dropped without being read, and the content of the populator is leaked if
-    /// this happens. This method also makes no attempt to claim these leaked resources. Given such limitation, unless
-    /// the usage of the stash can be known for certain in advance (like feeding a [`crate::scheme::Response`]), usage
-    /// of this method is discouraged.
-    ///
-    /// Despite the above limitation, this method can be useful to create an owning stash with zero-cost copying (only
-    /// the future is copied in the C++ library), eliminating the need of explicitly moving data together with a
-    /// borrowed stash.
-    pub fn lazy(populator: impl FnOnce() -> Stash<'static> + Send + 'static) -> Self {
-        // A lazy stash internally maintains a future and polls the populator at most once.
-        // The populator may be moved to another thread, but it won't be shared as only the future object in C++ is
-        // copied when copying the stash.
-        let bb = Box::new(populator) as Box<dyn FnOnce() -> Stash<'static>>;
-        let arg = Box::into_raw(Box::new(bb));
-        let ptr = unsafe { saucer_stash_lazy_with_arg(Some(stash_lazy_trampoline), arg as *mut c_void) };
-
-        Self::from_ptr(ptr)
-    }
-}
-
-impl<'a> AsRef<[u8]> for Stash<'a> {
+impl AsRef<[u8]> for Stash<'_> {
     fn as_ref(&self) -> &[u8] { self.data() }
 }
 
-extern "C" fn stash_lazy_trampoline(arg: *mut c_void) -> *mut saucer_stash {
-    let bb = unsafe { Box::from_raw(arg as *mut Box<dyn FnOnce() -> Stash<'static>>) };
+struct LazyCallbackData {
+    callback: Box<dyn FnOnce() -> Stash<'static> + Send + 'static>,
+}
+
+extern "C" fn stash_lazy_tp(data: *mut c_void) -> *mut saucer_stash {
+    let bb = unsafe { Box::from_raw(data as *mut LazyCallbackData) };
     // The C library will free the stash object, so only the handle is dropped.
-    let mut st = bb();
+    let mut st = (bb.callback)();
     st.leak = true;
     st.as_ptr()
 }

@@ -1,31 +1,40 @@
-use saucers::app::App;
-use saucers::options::AppOptions;
-use saucers::prefs::Preferences;
+use saucers::app::AppManager;
+use saucers::app::AppOptions;
+use saucers::webview::ScriptTime;
 use saucers::webview::Webview;
+use saucers::webview::WebviewOptions;
+use saucers::window::Window;
+use saucers::window::WindowDecoration;
+use saucers::NoOp;
 
-/// This example demonstrates how to create a frameless window and use the `data-webview-drag` attribute to allow
-/// dragging the window using an HTML element.
+/// This example shows how to create a frameless window and use the `data-webview-drag` attribute to
+/// allow dragging the window using an HTML element.
 fn main() {
-    let (_cc, app) = App::new(AppOptions::new("Frameless"));
+    let app = AppManager::new(AppOptions::new_with_id("frameless"));
 
-    let w = Webview::new(&Preferences::new(&app)).unwrap();
+    app.run(
+        |app, fin| {
+            let window = Window::new(&app, NoOp).unwrap();
+            window.set_decorations(WindowDecoration::None);
+            window.set_size((1152, 648));
+            window.show();
 
-    w.set_decorations(false);
-    w.set_size(1152, 648);
+            let webview =
+                Webview::new(WebviewOptions::default(), window, NoOp, NoOp, vec![]).unwrap();
 
-    w.set_url("data:text/html,");
+            let _ = webview.inject("console.log('hello');", ScriptTime::Ready, true, true);
 
-    // Add a button which can be used to drag the window.
-    // There currently isn't an attribute for using an element as the close button. Consider using messages for this.
-    w.execute(
-        r#"
-        document.body.innerHTML = `
-            <button data-webview-drag>Drag Window</button>
-        `;
-    "#
-    );
+            // Add buttons. Use attributes to map their actions into the native window.
+            webview.set_html(
+                r#"
+                    <button data-webview-drag>Drag Me</button>
+                    <button data-webview-close>Close</button>
+                "#,
+            );
 
-    w.show();
-
-    app.run();
+            fin.set(|_| drop(webview));
+        },
+        NoOp,
+    )
+    .unwrap();
 }
