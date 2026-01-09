@@ -71,10 +71,6 @@ impl Desktop {
             }
         });
 
-        for b in buf.clone() {
-            println!("Byte: {b}");
-        }
-
         if buf.is_empty() {
             Err(crate::error::Error::Saucer(ex))
         } else {
@@ -101,11 +97,13 @@ impl Desktop {
     /// Picks multiple files with the given options.
     pub fn pick_files(&self, opt: &PickerOptions) -> crate::error::Result<Vec<String>> {
         let mut ex = -1;
-        let buf = load_range!(ptr[size] = 0u8; {
+        let mut buf = load_range!(ptr[size] = 0u8; {
             unsafe {
                 saucer_picker_pick_files(self.ptr.as_ptr(), opt.as_ptr(), ptr as *mut c_char, size, &raw mut ex);
             }
         });
+
+        buf.push(0);
 
         if buf.is_empty() {
             Err(crate::error::Error::Saucer(ex))

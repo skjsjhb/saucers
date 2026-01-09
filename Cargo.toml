@@ -16,7 +16,7 @@ exclude = [
 
 [dependencies]
 thiserror = "2.0.17"
-saucer-sys = { git = "https://github.com/skarl3t/saucer-sys", rev = "99ce077" }
+saucer-sys = { git = "https://github.com/skarl3t/saucer-sys", rev = "e26b5bd" }
 
 [build-dependencies]
 build-target = "0.8.0"
