@@ -358,7 +358,7 @@ extern "C" fn ev_on_permission_tp(
     let data = unsafe { &*(data as *const EventListenerData) };
 
     let ret = if let Some(w) = data.webview.upgrade() {
-        data.listener.on_permission(w, req)
+        data.listener.on_permission(w.clone(), req)
     } else {
         HandleStatus::Unhandled
     };
@@ -374,7 +374,7 @@ extern "C" fn ev_on_fullscreen_tp(
     let data = unsafe { &*(data as *const EventListenerData) };
 
     let ret = if let Some(w) = data.webview.upgrade() {
-        data.listener.on_fullscreen(w, is_fullscreen)
+        data.listener.on_fullscreen(w.clone(), is_fullscreen)
     } else {
         Policy::Allow
     };
@@ -386,7 +386,7 @@ extern "C" fn ev_on_dom_ready_tp(_: *mut saucer_webview, data: *mut c_void) {
     let data = unsafe { &*(data as *const EventListenerData) };
 
     if let Some(w) = data.webview.upgrade() {
-        data.listener.on_dom_ready(w);
+        data.listener.on_dom_ready(w.clone());
     }
 }
 
@@ -397,7 +397,7 @@ extern "C" fn ev_on_navigated_tp(_: *mut saucer_webview, url: *mut saucer_url, d
     let data = unsafe { &*(data as *const EventListenerData) };
 
     if let Some(w) = data.webview.upgrade() {
-        data.listener.on_navigated(w, url);
+        data.listener.on_navigated(w.clone(), url);
     }
 }
 
@@ -411,7 +411,7 @@ extern "C" fn ev_on_navigate_tp(
     let data = unsafe { &*(data as *const EventListenerData) };
 
     let ret = if let Some(w) = data.webview.upgrade() {
-        data.listener.on_navigate(w, &nav)
+        data.listener.on_navigate(w.clone(), &nav)
     } else {
         Policy::Allow
     };
@@ -432,7 +432,7 @@ extern "C" fn ev_on_message_tp(
     let data = unsafe { &*(data as *const EventListenerData) };
 
     let ret = if let Some(w) = data.webview.upgrade() {
-        data.listener.on_message(w, s)
+        data.listener.on_message(w.clone(), s)
     } else {
         HandleStatus::Unhandled
     };
@@ -445,7 +445,7 @@ extern "C" fn ev_on_request_tp(_: *mut saucer_webview, req: *mut saucer_url, dat
     let data = unsafe { &*(data as *const EventListenerData) };
 
     if let Some(w) = data.webview.upgrade() {
-        data.listener.on_request(w, url);
+        data.listener.on_request(w.clone(), url);
     }
 }
 
@@ -458,7 +458,7 @@ extern "C" fn ev_on_favicon_tp(
     let data = unsafe { &*(data as *const EventListenerData) };
 
     if let Some(w) = data.webview.upgrade() {
-        data.listener.on_favicon(w, icon);
+        data.listener.on_favicon(w.clone(), icon);
     }
 }
 
@@ -474,7 +474,7 @@ extern "C" fn ev_on_title_tp(
     let data = unsafe { &*(data as *const EventListenerData) };
 
     if let Some(w) = data.webview.upgrade() {
-        data.listener.on_title(w, s);
+        data.listener.on_title(w.clone(), s);
     }
 }
 
@@ -482,7 +482,7 @@ extern "C" fn ev_on_load_tp(_: *mut saucer_webview, state: saucer_state, data: *
     let data = unsafe { &*(data as *const EventListenerData) };
 
     if let Some(w) = data.webview.upgrade() {
-        data.listener.on_load(w, state.into());
+        data.listener.on_load(w.clone(), state.into());
     }
 }
 
@@ -499,6 +499,6 @@ extern "C" fn handle_scheme_tp(
     let exc = unsafe { Executor::from_ptr(saucer_scheme_executor_copy(exc)) };
 
     if let Some(w) = data.webview.upgrade() {
-        data.handler.handle_scheme(w, req, exc)
+        data.handler.handle_scheme(w.clone(), req, exc)
     }
 }
