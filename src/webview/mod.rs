@@ -73,21 +73,10 @@ impl Drop for RawWebview {
                 use_string!(s: s.as_ref(); saucer_webview_remove_scheme(ptr, s));
             }
 
-            saucer_webview_off_all(ptr, SAUCER_WEBVIEW_EVENT_PERMISSION);
-            saucer_webview_off_all(ptr, SAUCER_WEBVIEW_EVENT_FULLSCREEN);
-            saucer_webview_off_all(ptr, SAUCER_WEBVIEW_EVENT_DOM_READY);
-            saucer_webview_off_all(ptr, SAUCER_WEBVIEW_EVENT_NAVIGATED);
-            saucer_webview_off_all(ptr, SAUCER_WEBVIEW_EVENT_NAVIGATE);
-            saucer_webview_off_all(ptr, SAUCER_WEBVIEW_EVENT_MESSAGE);
-            saucer_webview_off_all(ptr, SAUCER_WEBVIEW_EVENT_REQUEST);
-            saucer_webview_off_all(ptr, SAUCER_WEBVIEW_EVENT_FAVICON);
-            saucer_webview_off_all(ptr, SAUCER_WEBVIEW_EVENT_TITLE);
-            saucer_webview_off_all(ptr, SAUCER_WEBVIEW_EVENT_LOAD);
-
             // Technically, a webview may be freed after its corresponding window due to the
             // deferred posting, which may introduce broken states. However, such broken states will
             // only happen when the handle is being dropped, which is not visible to the safe world.
-            saucer_webview_free(ptr);
+            saucer_webview_free(ptr); // Events will be automatically cleaned
 
             drop(Box::from_raw(cl.scheme_handler_data));
             drop(Box::from_raw(cl.event_listener_data));

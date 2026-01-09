@@ -56,14 +56,8 @@ impl Drop for RawWindow {
             let _ = &cl;
 
             let ptr = cl.inner.as_ptr();
-            saucer_window_off_all(ptr, SAUCER_WINDOW_EVENT_DECORATED);
-            saucer_window_off_all(ptr, SAUCER_WINDOW_EVENT_MAXIMIZE);
-            saucer_window_off_all(ptr, SAUCER_WINDOW_EVENT_MINIMIZE);
-            saucer_window_off_all(ptr, SAUCER_WINDOW_EVENT_CLOSED);
-            saucer_window_off_all(ptr, SAUCER_WINDOW_EVENT_RESIZE);
-            saucer_window_off_all(ptr, SAUCER_WINDOW_EVENT_FOCUS);
-            saucer_window_off_all(ptr, SAUCER_WINDOW_EVENT_CLOSE);
-            saucer_window_free(ptr);
+
+            saucer_window_free(ptr); // Events will be automatically cleaned
 
             // We can't be inside an event handler here as they're executed with a backed-up handle
             drop(Box::from_raw(cl.event_listener_data));

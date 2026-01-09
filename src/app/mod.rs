@@ -162,9 +162,6 @@ impl AppManager {
             saucer_application_run(ptr, Some(run_callback_tp), Some(finish_callback_tp), cdata)
         };
 
-        // Clear all events so that we don't need to worry about dropping
-        unsafe { saucer_application_off_all(ptr, SAUCER_APPLICATION_EVENT_QUIT) };
-
         let _ = unsafe { Box::from_raw(data) };
 
         drop(app); // Ensure the handle is kept to the very end
@@ -323,6 +320,8 @@ extern "C" fn post_callback_tp(data: *mut c_void) {
     // SAFETY: The method is invoked only once.
     let data = unsafe { Box::from_raw(data as *mut PostCallbackData) };
     if let Some(app) = data.app.upgrade() {
+        // Clone is not needed like webviews, as app is guaranteed to be valid when the event loop
+        // is running
         (data.callback)(app);
     }
 }
