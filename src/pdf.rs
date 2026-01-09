@@ -4,18 +4,19 @@
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
-use crate::capi::*;
-use crate::macros::rtoc;
+use saucer_sys::*;
+
+use crate::macros::use_string;
 use crate::webview::Webview;
 
 /// The PDF printing module.
 ///
-/// This struct holds a [`Webview`] internally, making it an equivalent to a webview handle when considering the usage
-/// of webview handles.
+/// This struct holds a [`Webview`] internally, making it an equivalent to a webview handle when
+/// considering the usage of webview handles.
 pub struct Pdf {
     ptr: NonNull<saucer_pdf>,
     _webview: Webview,
-    _owns: PhantomData<saucer_pdf>
+    _marker: PhantomData<saucer_pdf>,
 }
 
 unsafe impl Send for Pdf {}
@@ -30,74 +31,68 @@ impl Pdf {
     pub fn new(w: &Webview) -> Self {
         let ptr = unsafe { saucer_pdf_new(w.as_ptr()) };
         Self {
-            ptr: NonNull::new(ptr).expect("Failed to create pdf module"),
+            ptr: NonNull::new(ptr).expect("PDF module should be created"),
             _webview: w.clone(),
-            _owns: PhantomData
+            _marker: PhantomData,
         }
     }
 
     /// Prints the content of the current page into a PDF file using the given settings.
     ///
-    /// This method blocks until the printing process finishes. It internally polls app events so the UI won't freeze,
-    /// but the processor usage may grow high when printing.
-    pub fn save(&self, settings: &PrintSettings) { unsafe { saucer_pdf_save(self.ptr.as_ptr(), settings.as_ptr()) } }
+    /// This method blocks until the printing process finishes. It internally polls app events so
+    /// the UI won't freeze, but the processor usage may grow high when printing.
+    pub fn save(&self, settings: impl AsRef<PdfSettings>) {
+        unsafe { saucer_pdf_save(self.ptr.as_ptr(), settings.as_ref().as_ptr()) }
+    }
 }
 
 /// PDF output layout.
 pub enum Layout {
     Portrait,
-    Landscape
+    Landscape,
 }
 
-impl From<Layout> for SAUCER_LAYOUT {
+impl From<Layout> for saucer_pdf_layout {
     fn from(l: Layout) -> Self {
         match l {
-            Layout::Portrait => SAUCER_LAYOUT_SAUCER_LAYOUT_PORTRAIT,
-            Layout::Landscape => SAUCER_LAYOUT_SAUCER_LAYOUT_LANDSCAPE
+            Layout::Portrait => SAUCER_PDF_LAYOUT_PORTRAIT,
+            Layout::Landscape => SAUCER_PDF_LAYOUT_LANDSCAPE,
         }
     }
 }
 
 /// Settings for PDF printing.
-pub struct PrintSettings {
-    ptr: NonNull<saucer_print_settings>,
-    _owns: PhantomData<saucer_print_settings>
+pub struct PdfSettings {
+    ptr: NonNull<saucer_pdf_settings>,
+    _marker: PhantomData<saucer_pdf_settings>,
 }
 
-unsafe impl Send for PrintSettings {}
-unsafe impl Sync for PrintSettings {}
+unsafe impl Send for PdfSettings {}
+unsafe impl Sync for PdfSettings {}
 
-impl Drop for PrintSettings {
-    fn drop(&mut self) { unsafe { saucer_print_settings_free(self.ptr.as_ptr()) } }
+impl Drop for PdfSettings {
+    fn drop(&mut self) { unsafe { saucer_pdf_settings_free(self.ptr.as_ptr()) } }
 }
 
-impl PrintSettings {
-    /// Creates a new set of print settings.
-    pub fn new() -> Self {
-        let ptr = unsafe { saucer_print_settings_new() };
+impl PdfSettings {
+    /// Creates a settings object that saves to the specified path.
+    pub fn new(fp: impl Into<Vec<u8>>) -> Self {
+        let ptr = use_string!(fp; unsafe { saucer_pdf_settings_new(fp) });
         Self {
-            ptr: NonNull::new(ptr).expect("Failed to create print settings"),
-            _owns: PhantomData
+            ptr: NonNull::new(ptr).expect("PDF settings should be created"),
+            _marker: PhantomData,
         }
-    }
-
-    /// Sets the output file.
-    pub fn set_file(&mut self, file: impl AsRef<str>) {
-        rtoc!(file => f; saucer_print_settings_set_file(self.ptr.as_ptr(), f.as_ptr()));
     }
 
     /// Sets the output orientation.
     pub fn set_orientation(&mut self, orientation: Layout) {
-        unsafe { saucer_print_settings_set_orientation(self.ptr.as_ptr(), orientation.into()) };
+        unsafe { saucer_pdf_settings_set_orientation(self.ptr.as_ptr(), orientation.into()) };
     }
 
-    /// Sets the output width.
-    pub fn set_width(&mut self, width: f64) { unsafe { saucer_print_settings_set_width(self.ptr.as_ptr(), width) }; }
-
-    /// Sets the output height.
-    pub fn set_height(&mut self, height: f64) {
-        unsafe { saucer_print_settings_set_height(self.ptr.as_ptr(), height) };
+    /// Sets the output size.
+    pub fn set_size(&mut self, width: f64, height: f64) {
+        unsafe { saucer_pdf_settings_set_size(self.ptr.as_ptr(), width, height) };
     }
 
-    fn as_ptr(&self) -> *mut saucer_print_settings { self.ptr.as_ptr() }
+    fn as_ptr(&self) -> *mut saucer_pdf_settings { self.ptr.as_ptr() }
 }

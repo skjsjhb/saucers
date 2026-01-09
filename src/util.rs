@@ -1,28 +1,38 @@
-use std::ffi::CStr;
 use std::ffi::c_char;
-use std::ffi::c_void;
+use std::ffi::CStr;
 
-use crate::capi::*;
-
-pub(crate) unsafe fn take_str(ptr: *mut c_char) -> Option<String> {
+/// Copies the given C string into an owned [`String`]. Performs lossy UTF-8 conversion if needed.
+///
+/// SAFETY: See [`CStr::from_ptr`].
+pub(crate) unsafe fn make_owned_string(ptr: *const c_char) -> String {
     if ptr.is_null() {
-        None
+        "".to_owned()
     } else {
-        let s = unsafe { shot_str(ptr) };
-        unsafe { saucer_memory_free(ptr as *mut c_void) }
-        s
+        unsafe { CStr::from_ptr(ptr) }.to_string_lossy().into_owned()
     }
 }
 
-pub(crate) unsafe fn shot_str(ptr: *const c_char) -> Option<String> {
-    if ptr.is_null() {
-        None
-    } else {
-        Some(
-            unsafe { CStr::from_ptr(ptr) }
-                .to_str()
-                .expect("Invalid UTF-8 string")
-                .to_string()
-        )
+/// Loads null-split string array from the given source.
+pub(crate) fn inflate_strings(mut src: &[u8]) -> Vec<String> {
+    if src.is_empty() {
+        return Vec::new();
     }
+
+    let mut out = Vec::new();
+
+    loop {
+        let Ok(f) = CStr::from_bytes_until_nul(src) else {
+            break;
+        };
+
+        out.push(f.to_string_lossy().into_owned());
+        let bc = f.count_bytes() + 1;
+
+        src = match src.get(bc..) {
+            Some(s) => s,
+            None => break,
+        };
+    }
+
+    out
 }

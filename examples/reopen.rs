@@ -1,32 +1,45 @@
-use saucers::app::App;
-use saucers::options::AppOptions;
-use saucers::prefs::Preferences;
-use saucers::webview::Webview;
-use saucers::webview::events::CloseEvent;
+use std::cell::Cell;
 
-/// This example shows how to listen for the close event and prevent the default behavior conditionally.
+use saucers::app::AppManager;
+use saucers::app::AppOptions;
+use saucers::policy::Policy;
+use saucers::window::Window;
+use saucers::window::WindowEventListener;
+use saucers::NoOp;
+
+/// This example shows how to listen for the close event and prevent the default behavior
+/// conditionally.
 fn main() {
-    let (_cc, app) = App::new(AppOptions::new("Reopen"));
+    let app = AppManager::new(AppOptions::new_with_id("reopen"));
 
-    let w = Webview::new(&Preferences::new(&app)).unwrap();
+    app.run(
+        |app, fin| {
+            struct WindowEv {
+                allow_close: Cell<bool>,
+            }
 
-    w.set_size(1152, 648);
+            let window_ev = WindowEv { allow_close: Cell::new(false) };
 
-    let mut allow_close = false;
+            impl WindowEventListener for WindowEv {
+                fn on_close(&self, _window: Window) -> Policy {
+                    if self.allow_close.replace(true) {
+                        println!("OK I'm closing.");
+                        Policy::Allow
+                    } else {
+                        println!("Press again to close...");
+                        Policy::Block
+                    }
+                }
+            }
 
-    w.on::<CloseEvent>(Box::new(move |_| {
-        if !allow_close {
-            allow_close = true;
-            println!("Press again to close the window!");
-            false
-        } else {
-            println!("OK I'm closing.");
-            true
-        }
-    }));
+            let window = Window::new(&app, window_ev).unwrap();
 
-    w.set_url("data:text/html,");
-    w.show();
+            window.set_size((1152, 648));
+            window.show();
 
-    app.run();
+            fin.set(|_| drop(window));
+        },
+        NoOp,
+    )
+    .unwrap();
 }

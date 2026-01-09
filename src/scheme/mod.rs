@@ -1,18 +1,21 @@
 //! Scheme handling module.
 //!
-//! This module includes [`Executor`], [`Request`] and [`Response`] to handle requests to custom schemes.
+//! This module includes [`Executor`], [`Request`] and [`Response`] to handle requests to custom
+//! schemes.
 mod executor;
-mod req;
-mod res;
+mod request;
+mod response;
 
 pub use executor::*;
-pub use req::*;
-pub use res::*;
+pub use request::*;
+pub use response::*;
+use saucer_sys::saucer_webview_register_scheme;
 
-use crate::capi::saucer_register_scheme;
-use crate::macros::rtoc;
+use crate::macros::use_string;
 
 /// Registers a custom scheme.
 ///
-/// This method must be called before creating any [`crate::app::App`] instances for the registration to take effect.
-pub fn register_scheme(name: impl AsRef<str>) { rtoc!(name => n; saucer_register_scheme(n.as_ptr())) }
+/// This method must be called before creating any app handles to take effect.
+pub fn register_scheme(name: impl Into<Vec<u8>>) {
+    use_string!(n: name; unsafe { saucer_webview_register_scheme(n) });
+}

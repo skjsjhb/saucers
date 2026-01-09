@@ -1,25 +1,25 @@
-use saucers::app::App;
+use saucers::app::AppManager;
+use saucers::app::AppOptions;
 use saucers::desktop::Desktop;
 use saucers::desktop::PickerOptions;
-use saucers::options::AppOptions;
+use saucers::NoOp;
 
-/// This example shows how to pick a file using the desktop module, then open it with the system default handler.
+/// This example shows how to pick a file using the desktop module, then open it with the system
+/// default handler.
 fn main() {
-    #[cfg(feature = "desktop-mod")]
-    {
-        let (_cc, app) = App::new(AppOptions::new("DesktopMod"));
-        let dsk = Desktop::new(&app);
-        let fp = dsk.pick_file(&PickerOptions::new());
+    let app = AppManager::new(AppOptions::new_with_id("desktop"));
 
-        match fp {
-            Some(f) => {
-                println!("File selected: {}", f);
-                dsk.open(f);
+    app.run(
+        |app, _| {
+            let dsk = Desktop::new(&app);
+            match dsk.pick_file(&PickerOptions::new()) {
+                Ok(fp) => println!("Selected file path: {fp}"),
+                Err(ex) => println!("Did not select file: {ex}"),
             }
 
-            None => {
-                println!("No file selected!");
-            }
-        }
-    }
+            app.quit();
+        },
+        NoOp,
+    )
+    .unwrap();
 }

@@ -37,16 +37,15 @@ jobs:
         run: |-
           eval $(dbus-launch --sh-syntax --exit-with-session)
           export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
-          xvfb-run cargo test --verbose --test '*'
+          xvfb-run cargo run --verbose
 
       - name: Test
         if: matrix.os == 'windows-latest'
         timeout-minutes: 5
-        run: cargo test --verbose --test '*'
+        run: cargo run --verbose
 
       - name: Test
         if: matrix.os == 'macos-latest'
         timeout-minutes: 5
         run: |-
-          cargo run --bin app-test-exec
-          cargo run --bin webview-test-exec  
+          cargo run --verbose

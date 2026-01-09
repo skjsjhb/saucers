@@ -1,57 +1,145 @@
+use std::borrow::Cow;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
+
 use saucers::app::App;
-use saucers::options::AppOptions;
-use saucers::prefs::Preferences;
+use saucers::app::AppEventListener;
+use saucers::app::AppManager;
+use saucers::app::AppOptions;
+use saucers::navigation::Navigation;
+use saucers::policy::Policy;
+use saucers::scheme::register_scheme;
+use saucers::scheme::Executor;
+use saucers::scheme::Request;
+use saucers::scheme::Response;
+use saucers::stash::Stash;
+use saucers::state::LoadState;
+use saucers::status::HandleStatus;
+use saucers::webview::ScriptTime;
 use saucers::webview::Webview;
-use saucers::webview::events::DomReadyEvent;
-use saucers::webview::events::FaviconEvent;
+use saucers::webview::WebviewEventListener;
+use saucers::webview::WebviewOptions;
+use saucers::webview::WebviewSchemeHandler;
+use saucers::window::Window;
+use saucers::NoOp;
 
 fn main() {
-    // Create an app to manage the event cycle.
-    // The app returns a collector which must be kept to live longer than all `App`s and `Webview`s.
-    // It detects leaks internally and gives a panic when dropped incorrectly.
-    let (cc, app) = App::new(AppOptions::new("saucer"));
+    register_scheme("test");
 
-    // Customize webview behavior using a preference set.
-    let mut prefs = Preferences::new(&app);
-    prefs.set_user_agent("saucer");
+    let app = AppManager::new(AppOptions::new_with_id("hello"));
 
-    // Create a new webview instance.
-    let w = Webview::new(&prefs).unwrap();
-    drop(prefs);
+    let counter = Arc::new(());
 
-    // Register a one-time listener for DOM ready event.
-    // Use the turbofish syntax to specify the event type.
-    // Prefer using the handle argument instead of capturing to prevent cycle references.
-    w.once::<DomReadyEvent>(Box::new(move |w| {
-        w.execute("window.saucer.internal.send_message(`Hello! Your user agent is '${navigator.userAgent}'!`);");
-    }));
+    #[derive(Default)]
+    struct Trace {
+        quit_fired: bool,
+        message_received: bool,
+        load_fired: bool,
+        dom_ready_fired: bool,
+        navigate_fired: bool,
+        inject_script_executed: bool,
+    }
 
-    // Registers a repeatable event handler for favicon event.
-    let on_favicon_id = w.on::<FaviconEvent>(Box::new(|_, icon| {
-        println!("Wow, you have a favicon of {} bytes!", icon.data().size());
-    }));
+    impl Trace {
+        fn verify(&self) {
+            assert!(self.quit_fired, "quit event should be fired");
+            assert!(self.message_received, "message should be received");
+            assert!(self.load_fired, "load event should be fired");
+            assert!(self.dom_ready_fired, "DOM ready event should be fired");
+            assert!(self.navigate_fired, "navigate event should be fired");
+            assert!(self.inject_script_executed, "inject script should be executed");
+        }
+    }
 
-    // Handles incoming webview messages.
-    // This API forwards the message as-is, allowing more complex channels to be built on it.
-    w.on_message(|_, msg| {
-        println!("Browser: {msg}");
-    });
+    #[derive(Clone)]
+    struct SharedTrace {
+        trace: Rc<RefCell<Trace>>,
+        _counter: Arc<()>,
+    }
 
-    // Set several runtime properties for webview.
-    w.set_url("https://saucer.app");
-    w.set_size(1152, 648);
-    w.set_dev_tools(true);
-    w.set_title("Saucer + Rust");
+    let trace = Rc::new(RefCell::new(Trace::default()));
 
-    // Show and run the app.
-    w.show();
-    app.run();
+    impl AppEventListener for SharedTrace {
+        fn on_quit(&self, _app: App) -> Policy {
+            self.trace.borrow_mut().quit_fired = true;
+            Policy::Allow
+        }
+    }
 
-    // An event handler can be cleared using its ID.
-    w.off::<FaviconEvent>(on_favicon_id);
+    impl WebviewEventListener for SharedTrace {
+        fn on_dom_ready(&self, webview: Webview) {
+            self.trace.borrow_mut().dom_ready_fired = true;
+            webview.execute("window.saucer.internal.message(window._injected.toString());");
+        }
 
-    // Rust will clean up everything in correct order. But to make it clear, we will drop it manually.
-    drop(w);
-    drop(app);
-    drop(cc);
+        fn on_navigate(&self, _webview: Webview, _nav: &Navigation) -> Policy {
+            self.trace.borrow_mut().navigate_fired = true;
+            Policy::Allow
+        }
+
+        fn on_message(&self, webview: Webview, msg: Cow<str>) -> HandleStatus {
+            if msg == "true" {
+                self.trace.borrow_mut().inject_script_executed = true;
+                webview.window().close();
+            } else {
+                self.trace.borrow_mut().message_received = true;
+            }
+
+            HandleStatus::Handled
+        }
+
+        fn on_load(&self, _webview: Webview, _state: LoadState) {
+            self.trace.borrow_mut().load_fired = true;
+        }
+    }
+
+    let trace_app = SharedTrace { trace: trace.clone(), _counter: counter.clone() };
+    let trace_webview = trace_app.clone();
+
+    const HTML: &str = r#"
+        <script>
+            window.saucer.internal.message('Hello');
+        </script>
+    "#;
+
+    const URL: &str = "test://some/content";
+
+    struct SchemeHd;
+
+    impl WebviewSchemeHandler for SchemeHd {
+        fn handle_scheme(&self, _webview: Webview, req: Request, exc: Executor) {
+            assert_eq!(req.url().content(), URL, "URL content should be correct");
+            exc.accept(Response::new(Stash::new_view(HTML.as_bytes()), "text/html"));
+        }
+    }
+
+    app.run(
+        {
+            let counter = counter.clone();
+            |app, fin| {
+                let wnd = Window::new(&app, NoOp).unwrap();
+                wnd.show();
+
+                let schemes = vec!["test".into()];
+
+                let wv =
+                    Webview::new(WebviewOptions::default(), wnd, trace_webview, SchemeHd, schemes)
+                        .unwrap();
+
+                wv.inject("window._injected = true;", ScriptTime::Creation, true, true);
+                wv.set_url_str(URL);
+
+                fin.set(move |_| {
+                    drop(wv);
+                    drop(counter);
+                });
+            }
+        },
+        trace_app,
+    )
+    .unwrap();
+
+    assert_eq!(Arc::strong_count(&counter), 1, "closures should be dropped");
+    trace.borrow().verify();
 }

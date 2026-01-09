@@ -1,33 +1,46 @@
-use saucers::app::App;
-use saucers::options::AppOptions;
-use saucers::prefs::Preferences;
+use saucers::app::AppManager;
+use saucers::app::AppOptions;
 use saucers::webview::Webview;
+use saucers::webview::WebviewOptions;
+use saucers::window::Window;
+use saucers::NoOp;
 
 /// This example demonstrates how to create a window with transparent/semi-transparent background.
-/// Transparent windows work best with decorations disabled, but to keep it simple this example preserves control
-/// widgets.
+/// Transparent windows work best with decorations disabled, but to keep it simple this example
+/// preserves control widgets.
 fn main() {
-    let (_cc, app) = App::new(AppOptions::new("Transparent"));
+    let app = AppManager::new(AppOptions::new_with_id("transparent"));
 
-    let w = Webview::new(&Preferences::new(&app)).unwrap();
+    app.run(
+        |app, fin| {
+            let window = Window::new(&app, NoOp).unwrap();
 
-    w.set_size(1152, 648);
-    w.set_background(0, 0, 0, 0);
+            window.set_size((1152, 648));
 
-    w.set_url("data:text/html,");
-    w.execute(
-        r#"
-        document.head.insertAdjacentHTML("beforeend", `
-            <style>
-                body {
-                    background: #ffaec880;
-                };
-            </style>
-        `);
-    "#
-    );
+            window.show();
 
-    w.show();
+            let webview =
+                Webview::new(WebviewOptions::default(), window.clone(), NoOp, NoOp, vec![])
+                    .unwrap();
 
-    app.run();
+            // Both the window and the webview must be transparent, or everything will just be
+            // solid.
+            window.set_background((0, 0, 0, 0));
+            webview.set_background(0, 0, 0, 0);
+
+            webview.set_html(
+                r#"
+                <style>
+                    body {
+                        background: #ffaec880;
+                    };
+                </style>
+                "#,
+            );
+
+            fin.set(|_| drop(webview));
+        },
+        NoOp,
+    )
+    .unwrap();
 }
