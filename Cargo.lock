@@ -231,7 +231,7 @@ checksum = "357703d41365b4b27c590e3ed91eabb1b663f07c4c084095e60cbed4362dff0d"
 [[package]]
 name = "saucer-sys"
 version = "8.0.0"
-source = "git+https://github.com/skarl3t/saucer-sys?rev=e8523a5#e8523a57090423801819d0ca1239444f929087a7"
+source = "git+https://github.com/skarl3t/saucer-sys?rev=99ce077#99ce077258a58578e4f4f4a6eb267eed966d4a42"
 dependencies = [
  "bindgen",
  "build-target",
