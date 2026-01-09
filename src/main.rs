@@ -7,6 +7,7 @@ use saucers::app::App;
 use saucers::app::AppEventListener;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
+use saucers::navigation::Navigation;
 use saucers::policy::Policy;
 use saucers::scheme::register_scheme;
 use saucers::scheme::Executor;
@@ -36,6 +37,7 @@ fn main() {
         message_received: bool,
         load_fired: bool,
         dom_ready_fired: bool,
+        navigate_fired: bool,
         inject_script_executed: bool,
     }
 
@@ -45,6 +47,7 @@ fn main() {
             assert!(self.message_received, "message should be received");
             assert!(self.load_fired, "load event should be fired");
             assert!(self.dom_ready_fired, "DOM ready event should be fired");
+            assert!(self.navigate_fired, "navigate event should be fired");
             assert!(self.inject_script_executed, "inject script should be executed");
         }
     }
@@ -52,6 +55,7 @@ fn main() {
     #[derive(Clone)]
     struct SharedTrace {
         trace: Rc<RefCell<Trace>>,
+        _counter: Arc<()>,
     }
 
     let trace = Rc::new(RefCell::new(Trace::default()));
@@ -66,13 +70,19 @@ fn main() {
     impl WebviewEventListener for SharedTrace {
         fn on_dom_ready(&self, webview: Webview) {
             self.trace.borrow_mut().dom_ready_fired = true;
-            webview.window().close();
+            webview.execute("window.saucer.internal.message(window._injected.toString());");
         }
 
-        fn on_message(&self, _webview: Webview, msg: Cow<str>) -> HandleStatus {
-            if msg == "Inject" {
+        fn on_navigate(&self, _webview: Webview, _nav: &Navigation) -> Policy {
+            self.trace.borrow_mut().navigate_fired = true;
+            Policy::Allow
+        }
+
+        fn on_message(&self, webview: Webview, msg: Cow<str>) -> HandleStatus {
+            if msg == "true" {
                 self.trace.borrow_mut().inject_script_executed = true;
-            } else if msg == "Hello" {
+                webview.window().close();
+            } else {
                 self.trace.borrow_mut().message_received = true;
             }
 
@@ -84,7 +94,7 @@ fn main() {
         }
     }
 
-    let trace_app = SharedTrace { trace: trace.clone() };
+    let trace_app = SharedTrace { trace: trace.clone(), _counter: counter.clone() };
     let trace_webview = trace_app.clone();
 
     const HTML: &str = r#"
@@ -117,13 +127,8 @@ fn main() {
                     Webview::new(WebviewOptions::default(), wnd, trace_webview, SchemeHd, schemes)
                         .unwrap();
 
+                wv.inject("window._injected = true;", ScriptTime::Creation, true, true);
                 wv.set_url_str(URL);
-                wv.inject(
-                    "window.saucer.internal.message('Inject');",
-                    ScriptTime::Ready,
-                    true,
-                    true,
-                );
 
                 fin.set(move |_| {
                     drop(wv);
