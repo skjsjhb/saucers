@@ -1,6 +1,6 @@
 use saucer_sys::*;
 
-/// A status returned by handler, describing whether a event has been handled.
+/// A status returned by handler describing whether an event has been handled.
 pub enum HandleStatus {
     Handled,
     Unhandled,

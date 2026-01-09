@@ -6,6 +6,7 @@ use saucer_sys::saucer_screen_size;
 
 use crate::util::make_owned_string;
 
+/// A struct containing information of a display screen.
 pub struct Screen {
     pub name: String,
     pub size: (i32, i32),

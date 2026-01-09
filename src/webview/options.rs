@@ -6,6 +6,10 @@ use saucer_sys::*;
 use crate::macros::use_string;
 use crate::window::Window;
 
+/// Options for configuring webview creation.
+///
+/// Saucer provides sensible defaults for webview setup. Leaving a field [`None`] picks these preset
+/// values.
 #[derive(Default)]
 pub struct WebviewOptions {
     pub allow_attributes: Option<bool>,

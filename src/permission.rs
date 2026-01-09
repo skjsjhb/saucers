@@ -5,6 +5,7 @@ use saucer_sys::*;
 
 use crate::url::Url;
 
+/// Possible permission request types.
 pub enum PermissionType {
     Unknown,
     AudioMedia,
@@ -34,6 +35,7 @@ impl From<saucer_permission_type> for PermissionType {
     }
 }
 
+/// A permission request handle.
 pub struct PermissionRequest {
     inner: NonNull<saucer_permission_request>,
     _marker: PhantomData<saucer_permission_request>,

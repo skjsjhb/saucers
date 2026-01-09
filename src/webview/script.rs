@@ -1,5 +1,6 @@
 use saucer_sys::*;
 
+/// The time that an injected script is executed.
 pub enum ScriptTime {
     Creation,
     Ready,

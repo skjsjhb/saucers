@@ -75,6 +75,11 @@ impl RawWindow {
     fn is_thread_safe(&self) -> bool { std::thread::current().id() == self.host_tid }
 }
 
+/// A window handle.
+///
+/// Window handles are shared and the underlying window is only closed after the last handle is
+/// dropped. When created inside the app start callback, it should be consumed in a webview, or
+/// moved into the [`crate::app::FinishListener`] so that it don't get closed immediately.
 #[derive(Clone)]
 pub struct Window(Arc<RawWindow>);
 
@@ -131,24 +136,34 @@ impl Window {
         Ok(wnd)
     }
 
+    /// Checks we're on the event thread.
     pub fn is_thread_safe(&self) -> bool { self.0.is_thread_safe() }
 
+    /// Checks whether the window is visible.
     pub fn is_visible(&self) -> bool { unsafe { saucer_window_visible(self.as_ptr()) } }
 
+    /// Checks whether the window is focused.
     pub fn is_focused(&self) -> bool { unsafe { saucer_window_focused(self.as_ptr()) } }
 
+    /// Checks whether the window is maximized.
     pub fn is_maximized(&self) -> bool { unsafe { saucer_window_maximized(self.as_ptr()) } }
 
+    /// Checks whether the window is minimized.
     pub fn is_minimized(&self) -> bool { unsafe { saucer_window_minimized(self.as_ptr()) } }
 
+    /// Checks whether the window is resizable.
     pub fn is_resizable(&self) -> bool { unsafe { saucer_window_resizable(self.as_ptr()) } }
 
+    /// Checks whether the window is fullscreen.
     pub fn is_fullscreen(&self) -> bool { unsafe { saucer_window_fullscreen(self.as_ptr()) } }
 
+    /// Checks whether the window is always on top.
     pub fn is_always_on_top(&self) -> bool { unsafe { saucer_window_always_on_top(self.as_ptr()) } }
 
+    /// Checks whether the window is click-through.
     pub fn is_click_through(&self) -> bool { unsafe { saucer_window_click_through(self.as_ptr()) } }
 
+    /// Gets the window title.
     pub fn title(&self) -> String {
         let st = load_range!(ptr[size] = 0u8; {
             unsafe { saucer_window_title(self.as_ptr(), ptr as *mut c_char, size) };
@@ -157,6 +172,7 @@ impl Window {
         String::from_utf8_lossy(&st).into_owned()
     }
 
+    /// Gets the window background color.
     pub fn background(&self) -> (u8, u8, u8, u8) {
         let mut r = 0;
         let mut g = 0;
@@ -168,10 +184,12 @@ impl Window {
         (r, g, b, a)
     }
 
+    /// Gets the window decoration status.
     pub fn decorations(&self) -> WindowDecoration {
         unsafe { saucer_window_decorations(self.as_ptr()) as saucer_window_decoration }.into()
     }
 
+    /// Gets the window size.
     pub fn size(&self) -> (i32, i32) {
         let mut x = 0;
         let mut y = 0;
@@ -180,6 +198,7 @@ impl Window {
         (x, y)
     }
 
+    /// Gets the window maximum size.
     pub fn max_size(&self) -> (i32, i32) {
         let mut x = 0;
         let mut y = 0;
@@ -187,6 +206,7 @@ impl Window {
         (x, y)
     }
 
+    /// Gets the window minimum size.
     pub fn min_size(&self) -> (i32, i32) {
         let mut x = 0;
         let mut y = 0;
@@ -194,6 +214,7 @@ impl Window {
         (x, y)
     }
 
+    /// Gets the window position.
     pub fn position(&self) -> (i32, i32) {
         let mut x = 0;
         let mut y = 0;
@@ -201,52 +222,67 @@ impl Window {
         (x, y)
     }
 
+    /// Gets the screen this window is on. Returns [`None`] if the screen can't be determined.
     pub fn screen(&self) -> Option<Screen> {
         unsafe { Screen::from_raw(saucer_window_screen(self.as_ptr())) }
     }
 
+    /// Hides the window.
     pub fn hide(&self) { unsafe { saucer_window_hide(self.as_ptr()) } }
 
+    /// Shows the window.
     pub fn show(&self) { unsafe { saucer_window_show(self.as_ptr()) } }
 
+    /// Closes the window.
     pub fn close(&self) { unsafe { saucer_window_close(self.as_ptr()) } }
 
+    /// Focuses the window.
     pub fn focus(&self) { unsafe { saucer_window_focus(self.as_ptr()) } }
 
+    /// Starts a drag operation.
     pub fn start_drag(&self) { unsafe { saucer_window_start_drag(self.as_ptr()) } }
 
+    /// Starts a resize operation on the given edge.
     pub fn start_resize(&self, edge: WindowEdge) {
         unsafe { saucer_window_start_resize(self.as_ptr(), edge.into()) }
     }
 
+    /// Toggles window maximization.
     pub fn set_maximized(&self, maximized: bool) {
         unsafe { saucer_window_set_maximized(self.as_ptr(), maximized) }
     }
 
+    /// Toggles window minimization.
     pub fn set_minimized(&self, minimized: bool) {
         unsafe { saucer_window_set_minimized(self.as_ptr(), minimized) }
     }
 
+    /// Toggles window resizability.
     pub fn set_resizable(&self, resizable: bool) {
         unsafe { saucer_window_set_resizable(self.as_ptr(), resizable) }
     }
 
+    /// Toggles window fullscreen.
     pub fn set_fullscreen(&self, fullscreen: bool) {
         unsafe { saucer_window_set_fullscreen(self.as_ptr(), fullscreen) }
     }
 
+    /// Sets whether the window is always on top.
     pub fn set_always_on_top(&self, always_on_top: bool) {
         unsafe { saucer_window_set_always_on_top(self.as_ptr(), always_on_top) }
     }
 
+    /// Sets whether the window is click-through.
     pub fn set_click_through(&self, click_through: bool) {
         unsafe { saucer_window_set_click_through(self.as_ptr(), click_through) }
     }
 
+    /// Sets the window icon.
     pub fn set_icon(&self, icon: impl AsRef<Icon>) {
         unsafe { saucer_window_set_icon(self.as_ptr(), icon.as_ref().as_ptr()) }
     }
 
+    /// Sets the window title.
     pub fn set_title(&self, title: impl Into<Vec<u8>>) {
         use_string!(
             t: title;
@@ -254,26 +290,32 @@ impl Window {
         )
     }
 
+    /// Sets the window background color.
     pub fn set_background(&self, color: (u8, u8, u8, u8)) {
         unsafe { saucer_window_set_background(self.as_ptr(), color.0, color.1, color.2, color.3) }
     }
 
+    /// Sets the window decoration status.
     pub fn set_decorations(&self, dec: WindowDecoration) {
         unsafe { saucer_window_set_decorations(self.as_ptr(), dec.into()) }
     }
 
+    /// Sets the window size.
     pub fn set_size(&self, size: (i32, i32)) {
         unsafe { saucer_window_set_size(self.as_ptr(), size.0, size.1) }
     }
 
+    /// Sets the window maximum size.
     pub fn set_max_size(&self, size: (i32, i32)) {
         unsafe { saucer_window_set_max_size(self.as_ptr(), size.0, size.1) }
     }
 
+    /// Sets the window minimum size.
     pub fn set_min_size(&self, size: (i32, i32)) {
         unsafe { saucer_window_set_min_size(self.as_ptr(), size.0, size.1) }
     }
 
+    /// Sets the window position.
     pub fn set_position(&self, pos: (i32, i32)) {
         unsafe { saucer_window_set_position(self.as_ptr(), pos.0, pos.1) }
     }

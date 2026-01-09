@@ -1,5 +1,6 @@
 use saucer_sys::*;
 
+/// Window edge descriptor for specifying dragging operations.
 pub enum WindowEdge {
     Top,
     Bottom,

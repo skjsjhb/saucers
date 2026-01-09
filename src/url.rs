@@ -12,6 +12,7 @@ use saucer_sys::*;
 use crate::macros::load_range;
 use crate::macros::use_string;
 
+/// A URL handle backed by an underlying native URL object.
 pub struct Url {
     inner: NonNull<saucer_url>,
     _marker: PhantomData<saucer_url>,
@@ -47,6 +48,7 @@ impl Url {
         }
     }
 
+    /// Constructs a new URL from its parts.
     pub fn new(
         scheme: impl Into<Vec<u8>>,
         host: Option<impl Into<Vec<u8>>>,
@@ -72,6 +74,7 @@ impl Url {
         Self { inner: NonNull::new(ptr).expect("invalid URL ptr"), _marker: PhantomData }
     }
 
+    /// Creates a file URL using the given path.
     pub fn new_file(fp: impl Into<Vec<u8>>) -> crate::error::Result<Self> {
         let mut ex = -1;
 
@@ -82,6 +85,7 @@ impl Url {
         unsafe { Self::from_ptr(ptr, ex) }
     }
 
+    /// Parses the given URL string.
     pub fn new_parse(url: impl Into<Vec<u8>>) -> crate::error::Result<Self> {
         let mut ex = -1;
 
@@ -92,7 +96,7 @@ impl Url {
         unsafe { Self::from_ptr(ptr, ex) }
     }
 
-    /// Gets the URL string.
+    /// Gets the URL as a string.
     pub fn content(&self) -> String {
         let st = load_range!(ptr[size] = 0u8; {
             unsafe { saucer_url_string(self.as_ptr(), ptr as *mut c_char, size) };

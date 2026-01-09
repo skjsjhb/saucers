@@ -1,7 +1,3 @@
-//! Read-only binary data representation module.
-//!
-//! See [`Stash`] for details.
-use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
@@ -9,11 +5,8 @@ use saucer_sys::*;
 
 /// An immutable interface to interact with binary data.
 ///
-/// A stash can own its data, borrow data defined elsewhere, or provide a lazy callback that's
-/// evaluated on the first access.
-///
-/// Stashes are [`Send`] but ![`Sync`], since accessing the data may evaluate the callback, which
-/// is not protected among threads in the C API.
+/// A stash can own its data or borrow data defined elsewhere (as long as it outlives the stash
+/// handle).
 pub struct Stash<'a> {
     ptr: NonNull<saucer_stash>,
     /// When set to true, does not free the stash when this handle is dropped. This is required to
@@ -23,7 +16,7 @@ pub struct Stash<'a> {
 }
 
 unsafe impl Send for Stash<'_> {}
-// !Sync since polling a lazy stash on multiple threads is unsound.
+unsafe impl Sync for Stash<'_> {}
 
 impl Drop for Stash<'_> {
     fn drop(&mut self) {
@@ -37,14 +30,8 @@ impl Default for Stash<'_> {
     fn default() -> Self { Self::new_empty() }
 }
 
-// We can't give Clone even the stash is !Sync, since when two stashes share the same underlying
-// callback and value cache, having multiple handles without synchronization (which unfortunately is
-// the case in saucer) would make it unsound. Disabling cloning shall solve this, as saucer does not
-// internally poll a stash on multiple threads (at least not at the API level).
-#[cfg(false)]
 impl Clone for Stash<'_> {
     fn clone(&self) -> Self {
-        // Lazy stashes shares the same underlying callback and value cache.
         let ptr = unsafe { saucer_stash_copy(self.as_ptr()) };
         Self::from_ptr(ptr)
     }
@@ -84,6 +71,12 @@ impl Stash<'_> {
     ///
     /// Despite the above limitations, this method can be useful to create a stash that "carries"
     /// owned data, but without copying or the need of explicitly moving data with a borrowed stash.
+    ///
+    /// This method is disabled for now as it requires [`Self::data`] to take `&mut self`, breaks
+    /// [`Sync`] and [`Clone`]. Also, the safety of passing a lazy stash into C APIs are not yet
+    /// fully verified.
+    #[doc(hidden)]
+    #[cfg(false)]
     pub fn new_lazy(populator: impl FnOnce() -> Stash<'static> + Send + 'static) -> Self {
         // A lazy stash internally caches the value and will call the populator at most once.
         // However, it's uncertain when it will be called, thus Send + 'static. The returned stash
@@ -92,14 +85,6 @@ impl Stash<'_> {
         let data = Box::into_raw(Box::new(data)) as *mut c_void;
         let ptr = unsafe { saucer_stash_new_lazy(Some(stash_lazy_tp), data) };
 
-        Self::from_ptr(ptr)
-    }
-}
-
-impl<'a> Stash<'a> {
-    /// Creates a new stash that borrows the given data.
-    pub fn new_view(data: &'a [u8]) -> Self {
-        let ptr = unsafe { saucer_stash_new_view(data.as_ptr(), data.len()) };
         Self::from_ptr(ptr)
     }
 
@@ -116,15 +101,25 @@ impl<'a> Stash<'a> {
     }
 }
 
+impl<'a> Stash<'a> {
+    /// Creates a new stash that borrows the given data.
+    pub fn new_view(data: &'a [u8]) -> Self {
+        let ptr = unsafe { saucer_stash_new_view(data.as_ptr(), data.len()) };
+        Self::from_ptr(ptr)
+    }
+}
+
 impl AsRef<[u8]> for Stash<'_> {
     fn as_ref(&self) -> &[u8] { self.data() }
 }
 
+#[cfg(false)]
 struct LazyCallbackData {
     callback: Box<dyn FnOnce() -> Stash<'static> + Send + 'static>,
 }
 
-extern "C" fn stash_lazy_tp(data: *mut c_void) -> *mut saucer_stash {
+#[cfg(false)]
+extern "C" fn stash_lazy_tp(data: *mut std::ffi::c_void) -> *mut saucer_stash {
     let bb = unsafe { Box::from_raw(data as *mut LazyCallbackData) };
     // The C library will free the stash object, so only the handle is dropped.
     let mut st = (bb.callback)();

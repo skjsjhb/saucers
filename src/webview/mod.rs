@@ -94,10 +94,20 @@ impl RawWebview {
     fn is_thread_safe(&self) -> bool { std::thread::current().id() == self.host_tid }
 }
 
+/// A webview handle.
+///
+/// Webviews are shared and the underlying browser is only closed after the last handle is dropped.
+/// When created inside the app start callback, it should be moved into the
+/// [`crate::app::FinishListener`] so that it don't get closed immediately. Also, a webview captures
+/// the window it lives in, making it no longer necessary to keep the window handle separately.
 #[derive(Clone)]
 pub struct Webview(Arc<RawWebview>);
 
 impl Webview {
+    /// Constructs a new webview from the given [`WebviewOptions`], [`Window`],
+    /// [`WebviewEventListener`], [`WebviewSchemeHandler`], and a list of schemes that this webview
+    /// intend to handle. The scheme must be registered via [`crate::scheme::register_scheme`]
+    /// before being used.
     pub fn new(
         opt: WebviewOptions,
         window: Window,
@@ -164,6 +174,7 @@ impl Webview {
         Ok(wv)
     }
 
+    /// Gets the URL.
     pub fn url(&self) -> crate::error::Result<Url> {
         let mut ex = -1;
         let ptr = unsafe { saucer_webview_url(self.as_ptr(), &raw mut ex) };
@@ -171,10 +182,12 @@ impl Webview {
         unsafe { Url::from_ptr(ptr, ex) }
     }
 
+    /// Gets the favicon.
     pub fn favicon(&self) -> Icon {
         unsafe { Icon::from_ptr(saucer_webview_favicon(self.as_ptr())) }
     }
 
+    /// Gets the page title.
     pub fn page_title(&self) -> String {
         let buf = load_range!(ptr[size] = 0u8; {
             unsafe { saucer_webview_page_title(self.as_ptr(), ptr as *mut c_char, size) }
@@ -183,12 +196,16 @@ impl Webview {
         String::from_utf8_lossy(&buf).into_owned()
     }
 
+    /// Checks whether devtools is open.
     pub fn has_dev_tools(&self) -> bool { unsafe { saucer_webview_dev_tools(self.as_ptr()) } }
 
+    /// Checks whether context menu is enabled.
     pub fn has_context_menu(&self) -> bool { unsafe { saucer_webview_context_menu(self.as_ptr()) } }
 
+    /// Checks whether dark mode is enforced.
     pub fn is_force_dark(&self) -> bool { unsafe { saucer_webview_force_dark(self.as_ptr()) } }
 
+    /// Gets the background color.
     pub fn background(&self) -> (u8, u8, u8, u8) {
         let mut r = 0;
         let mut g = 0;
@@ -202,6 +219,7 @@ impl Webview {
         (r, g, b, a)
     }
 
+    /// Sets the webview bounds in the window.
     pub fn bounds(&self) -> (i32, i32, i32, i32) {
         let mut x = 0;
         let mut y = 0;
@@ -215,44 +233,56 @@ impl Webview {
         (x, y, w, h)
     }
 
+    /// Navigates to the given URL.
     pub fn set_url(&self, url: impl AsRef<Url>) {
         unsafe { saucer_webview_set_url(self.as_ptr(), url.as_ref().as_ptr()) } // Value copied
     }
 
+    /// Navigates to the given URL.
     pub fn set_url_str(&self, url: impl Into<Vec<u8>>) {
         use_string!(url; unsafe { saucer_webview_set_url_str(self.as_ptr(), url) });
     }
 
+    /// Sets the HTML content.
     pub fn set_html(&self, html: impl Into<Vec<u8>>) {
         use_string!(html; unsafe { saucer_webview_set_html(self.as_ptr(), html) });
     }
 
+    /// Toggles devtools.
     pub fn set_dev_tools(&self, enabled: bool) {
         unsafe { saucer_webview_set_dev_tools(self.as_ptr(), enabled) }
     }
 
+    /// Sets whether to enable context menu.
     pub fn set_context_menu(&self, enabled: bool) {
         unsafe { saucer_webview_set_context_menu(self.as_ptr(), enabled) }
     }
 
+    /// Sets whether to enforce dark mode.
     pub fn set_force_dark(&self, enabled: bool) {
         unsafe { saucer_webview_set_force_dark(self.as_ptr(), enabled) }
     }
 
+    /// Sets the background color.
     pub fn set_background(&self, r: u8, g: u8, b: u8, a: u8) {
         unsafe { saucer_webview_set_background(self.as_ptr(), r, g, b, a) }
     }
 
+    /// Reset webview bounds.
     pub fn reset_bounds(&self) { unsafe { saucer_webview_reset_bounds(self.as_ptr()) } }
 
+    /// Sets the webview bounds in the window.
     pub fn set_bounds(&self, x: i32, y: i32, w: i32, h: i32) {
         unsafe { saucer_webview_set_bounds(self.as_ptr(), x, y, w, h) }
     }
 
+    /// Navigates back.
     pub fn back(&self) { unsafe { saucer_webview_back(self.as_ptr()) } }
 
+    /// Navigates forward.
     pub fn forward(&self) { unsafe { saucer_webview_forward(self.as_ptr()) } }
 
+    /// Reloads the webview.
     pub fn reload(&self) { unsafe { saucer_webview_reload(self.as_ptr()) } }
 
     /// Navigates to the embedded content specified by the path.
@@ -260,6 +290,7 @@ impl Webview {
         use_string!(path; unsafe { saucer_webview_serve(self.as_ptr(), path) });
     }
 
+    /// Embeds a content with the specified path, content and MIME type.
     pub fn embed(
         &self,
         path: impl Into<Vec<u8>>,
@@ -271,16 +302,20 @@ impl Webview {
         });
     }
 
+    /// Removes all embedded items.
     pub fn unembed_all(&self) { unsafe { saucer_webview_unembed_all(self.as_ptr()) } }
 
+    /// Removes the embedded item at the given path.
     pub fn unembed(&self, path: impl Into<Vec<u8>>) {
         use_string!(path; unsafe { saucer_webview_unembed(self.as_ptr(), path) });
     }
 
+    /// Executes JavaScript code.
     pub fn execute(&self, js: impl Into<Vec<u8>>) {
         use_string!(js; unsafe { saucer_webview_execute(self.as_ptr(), js) });
     }
 
+    /// Schedules specified JavaScript code to be executed when the page loads.
     pub fn inject(
         &self,
         js: impl Into<Vec<u8>>,
@@ -295,19 +330,27 @@ impl Webview {
         ScriptId::from_usize(u)
     }
 
+    /// Removes all injected scripts.
     pub fn uninject_all(&self) { unsafe { saucer_webview_uninject_all(self.as_ptr()) } }
 
+    /// Removes injected script by ID.
     pub fn uninject(&self, id: ScriptId) {
         unsafe { saucer_webview_uninject(self.as_ptr(), id.as_usize()) }
     }
 
+    /// Gets the parent window.
     pub fn window(&self) -> Window { self.0.window.clone() }
 
+    /// Gets a weak [`WebviewRef`].
     pub fn downgrade(&self) -> WebviewRef { WebviewRef(Arc::downgrade(&self.0)) }
 
     pub(crate) fn as_ptr(&self) -> *mut saucer_webview { self.0.inner.as_ptr() }
 }
 
+/// A weak webview handle.
+///
+/// Like [`crate::app::AppRef`], this handle does not prevent deallocation and can be used in
+/// various listeners.
 #[derive(Clone)]
 pub struct WebviewRef(Weak<RawWebview>);
 

@@ -1,6 +1,3 @@
-//! Webview navigation descriptor module.
-//!
-//! See [`Navigation`] for details.
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
@@ -9,13 +6,16 @@ use saucer_sys::*;
 use crate::url::Url;
 
 /// A navigation descriptor.
+///
+/// Because the navigation descriptor interacts with underlying request object to fetch fields like
+/// [`Self::url`], it can't be safely owned / shared / sent and is only safe when being "confined"
+/// inside the event handler. It's associated lifetime indicates the validity.
 pub struct Navigation<'a> {
     ptr: NonNull<saucer_navigation>,
-    _marker: PhantomData<&'a saucer_navigation>,
+    _marker: PhantomData<(saucer_navigation, &'a ())>, // The opaque handle is still owned
 }
 
-unsafe impl Send for Navigation<'_> {}
-unsafe impl Sync for Navigation<'_> {}
+// !Send + !Sync as it may call thread-unsafe methods
 
 impl Navigation<'_> {
     /// SAFETY: The provided pointer must outlive the returned struct.

@@ -11,28 +11,28 @@ use crate::webview::Webview;
 
 /// The PDF printing module.
 ///
-/// This struct holds a [`Webview`] internally, making it an equivalent to a webview handle when
-/// considering the usage of webview handles.
-pub struct Pdf {
+/// This struct borrows a [`Webview`] as it uses browser functionalities to print documents, making
+/// its lifetime tied to the handle.
+pub struct Pdf<'a> {
     ptr: NonNull<saucer_pdf>,
-    _webview: Webview,
+    _webview: &'a Webview,
     _marker: PhantomData<saucer_pdf>,
 }
 
-unsafe impl Send for Pdf {}
-unsafe impl Sync for Pdf {}
+unsafe impl Send for Pdf<'_> {}
+unsafe impl Sync for Pdf<'_> {}
 
-impl Drop for Pdf {
+impl Drop for Pdf<'_> {
     fn drop(&mut self) { unsafe { saucer_pdf_free(self.ptr.as_ptr()) } }
 }
 
-impl Pdf {
+impl<'a> Pdf<'a> {
     /// Creates and mounts the PDF module to the given [`Webview`].
-    pub fn new(w: &Webview) -> Self {
+    pub fn new(w: &'a Webview) -> Self {
         let ptr = unsafe { saucer_pdf_new(w.as_ptr()) };
         Self {
             ptr: NonNull::new(ptr).expect("PDF module should be created"),
-            _webview: w.clone(),
+            _webview: w,
             _marker: PhantomData,
         }
     }

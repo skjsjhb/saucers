@@ -1,6 +1,7 @@
 use saucer_sys::*;
 
-/// An enum describing the load status of a web page.
+/// The load state of a web page. Used to distinguish stages in
+/// [`crate::webview::WebviewEventListener::on_load`].
 pub enum LoadState {
     Started,
     Finished,
