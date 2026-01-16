@@ -1,6 +1,5 @@
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
-use saucers::webview::ScriptTime;
 use saucers::webview::Webview;
 use saucers::webview::WebviewOptions;
 use saucers::window::Window;
@@ -21,8 +20,6 @@ fn main() {
 
             let webview =
                 Webview::new(WebviewOptions::default(), window, NoOp, NoOp, vec![]).unwrap();
-
-            let _ = webview.inject("console.log('hello');", ScriptTime::Ready, true, true);
 
             // Add buttons. Use attributes to map their actions into the native window.
             webview.set_html(
