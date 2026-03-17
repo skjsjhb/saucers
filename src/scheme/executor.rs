@@ -27,10 +27,11 @@ impl From<SchemeError> for saucer_scheme_error {
 /// The executor object used to resolve or reject a request to a custom scheme.
 ///
 /// An executor is passed as an argument to the scheme handler when a request comes. The handler can
-/// then [`Executor::accept`] or [`Executor::reject`] the request.
+/// then [`Executor::accept`] or [`Executor::reject`] the request. Crucially, the executor is never
+/// passed as value, only shared reference, which is important to prevent use-after-free in case the
+/// webview is destroyed.
 pub struct Executor {
     ptr: NonNull<saucer_scheme_executor>,
-    // TODO: Hold a webview handle to prevent destruction
     _marker: PhantomData<saucer_scheme_executor>,
 }
 
