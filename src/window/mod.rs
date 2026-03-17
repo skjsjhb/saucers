@@ -353,7 +353,7 @@ impl EventListenerData {
     }
 }
 
-unsafe extern "C" fn ev_on_decorated_tp(
+extern "C" fn ev_on_decorated_tp(
     _: *mut saucer_window,
     dec: saucer_window_decoration,
     data: *mut c_void,
