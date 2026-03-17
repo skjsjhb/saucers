@@ -81,4 +81,6 @@ Note that we hold no opinion on the use of generative AIs, nor are we standing a
 This badge acts as a disclaimer for the use of the MIT license, that we're not applying it to "possible code from
 others".
 
-[![Not By AI](./not-by-ai.png)](https://notbyai.fyi)
+<a href="https://notbyai.fyi">
+<img alt="Not By AI" width="150" src="not-by-ai.webp"/>
+</a>
