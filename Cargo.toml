@@ -1,13 +1,13 @@
 [package]
 name = "saucers"
 description = "Rust bindings for saucer, the C++ webview library."
-version = "0.5.0-8.0.0"
+version = "0.6.0-8.0.0"
 edition = "2024"
 license = "MIT"
 homepage = "https://github.com/skjsjhb/saucers"
 repository = "https://github.com/skjsjhb/saucers"
 readme = "README.md"
-rust-version = "1.92.0"
+rust-version = "1.94.0"
 exclude = [
     "**/.github/**/*",
     "rust-toolchain.toml",
@@ -15,7 +15,7 @@ exclude = [
 ]
 
 [dependencies]
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 saucer-sys = { git = "https://github.com/skarl3t/saucer-sys", rev = "e26b5bd" }
 
 [build-dependencies]
