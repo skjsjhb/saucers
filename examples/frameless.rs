@@ -1,10 +1,10 @@
+use saucers::NoOp;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::webview::Webview;
 use saucers::webview::WebviewOptions;
 use saucers::window::Window;
 use saucers::window::WindowDecoration;
-use saucers::NoOp;
 
 /// This example shows how to create a frameless window and use the `data-webview-drag` attribute to
 /// allow dragging the window using an HTML element.
@@ -18,8 +18,7 @@ fn main() {
             window.set_size((1152, 648));
             window.show();
 
-            let webview =
-                Webview::new(WebviewOptions::default(), window, NoOp, NoOp, vec![]).unwrap();
+            let webview = Webview::new(WebviewOptions::default(), window, NoOp, NoOp).unwrap();
 
             // Add buttons. Use attributes to map their actions into the native window.
             webview.set_html(

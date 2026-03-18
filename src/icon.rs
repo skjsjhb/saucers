@@ -60,7 +60,7 @@ impl Icon {
         let mut ex = -1;
         let ptr = unsafe {
             // The stash is read immediately. If it's lazy, then it's polled on the same thread,
-            // which won't invalidate references in the Rust world. Stashes are !Sync, thus we can
+            // which won't invalidate references in the Rust world. Stashes are Sync, thus we can
             // take a ref here.
             saucer_icon_new_from_stash(stash.as_ref().as_ptr(), &raw mut ex)
         };

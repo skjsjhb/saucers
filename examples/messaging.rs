@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use saucers::NoOp;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::scheme::register_scheme;
@@ -8,7 +9,6 @@ use saucers::webview::Webview;
 use saucers::webview::WebviewEventListener;
 use saucers::webview::WebviewOptions;
 use saucers::window::Window;
-use saucers::NoOp;
 
 /// This example demonstrates how to send message from webview to host and vice versa.
 /// Note that this example uses [`Webview::execute`] to message back, which can be inefficient for
@@ -37,8 +37,7 @@ fn main() {
                 }
             }
 
-            let webview =
-                Webview::new(WebviewOptions::default(), window, WebviewEv, NoOp, vec![]).unwrap();
+            let webview = Webview::new(WebviewOptions::default(), window, WebviewEv, NoOp).unwrap();
 
             // Browser scripts are not injected until a navigation (URL or HTML). Scripts enable
             // `window.saucer.internal.message` so that you have a unified API on all platforms.

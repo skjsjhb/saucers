@@ -3,16 +3,17 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use saucers::NoOp;
 use saucers::app::App;
 use saucers::app::AppEventListener;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::navigation::Navigation;
 use saucers::policy::Policy;
-use saucers::scheme::register_scheme;
 use saucers::scheme::Executor;
 use saucers::scheme::Request;
 use saucers::scheme::Response;
+use saucers::scheme::register_scheme;
 use saucers::stash::Stash;
 use saucers::state::LoadState;
 use saucers::status::HandleStatus;
@@ -22,7 +23,6 @@ use saucers::webview::WebviewEventListener;
 use saucers::webview::WebviewOptions;
 use saucers::webview::WebviewSchemeHandler;
 use saucers::window::Window;
-use saucers::NoOp;
 
 fn main() {
     register_scheme("test");
@@ -108,6 +108,8 @@ fn main() {
     struct SchemeHd;
 
     impl WebviewSchemeHandler for SchemeHd {
+        fn schemes(&self) -> Vec<Cow<'static, str>> { vec!["test".into()] }
+
         fn handle_scheme(&self, _webview: Webview, req: Request, exc: Executor) {
             assert_eq!(req.url().content(), URL, "URL content should be correct");
             exc.accept(Response::new(Stash::new_view(HTML.as_bytes()), "text/html"));
@@ -121,11 +123,8 @@ fn main() {
                 let wnd = Window::new(&app, NoOp).unwrap();
                 wnd.show();
 
-                let schemes = vec!["test".into()];
-
                 let wv =
-                    Webview::new(WebviewOptions::default(), wnd, trace_webview, SchemeHd, schemes)
-                        .unwrap();
+                    Webview::new(WebviewOptions::default(), wnd, trace_webview, SchemeHd).unwrap();
 
                 wv.inject("window._injected = true;", ScriptTime::Creation, true, true);
                 wv.set_url_str(URL);

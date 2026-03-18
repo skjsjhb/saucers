@@ -1,8 +1,8 @@
+use saucers::NoOp;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::desktop::Desktop;
 use saucers::desktop::PickerOptions;
-use saucers::NoOp;
 
 /// This example shows how to pick a file using the desktop module, then open it with the system
 /// default handler.

@@ -57,6 +57,9 @@ pub trait WebviewEventListener {
 /// A trait for handling schemes.
 #[allow(unused)] // Template
 pub trait WebviewSchemeHandler {
+    /// Returns all schemes this handler intends to process.
+    fn schemes(&self) -> Vec<Cow<'static, str>> { Vec::default() }
+
     /// Handles a scheme request.
     ///
     /// This method is called for all requests coming from the given webview and does not

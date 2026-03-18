@@ -6,11 +6,11 @@ use std::cell::RefCell;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::marker::PhantomData;
-use std::ptr::null_mut;
 use std::ptr::NonNull;
-use std::sync::mpsc::Sender;
+use std::ptr::null_mut;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::sync::mpsc::Sender;
 use std::thread::ThreadId;
 
 pub use decoration::*;

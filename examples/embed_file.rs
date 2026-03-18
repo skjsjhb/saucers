@@ -1,10 +1,10 @@
+use saucers::NoOp;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::stash::Stash;
 use saucers::webview::Webview;
 use saucers::webview::WebviewOptions;
 use saucers::window::Window;
-use saucers::NoOp;
 
 // Files can be included in the binary using macros.
 // This is usually automated by frameworks in real-world applications.
@@ -22,8 +22,7 @@ fn main() {
             window.set_size((1152, 648));
             window.show();
 
-            let webview =
-                Webview::new(WebviewOptions::default(), window, NoOp, NoOp, vec![]).unwrap();
+            let webview = Webview::new(WebviewOptions::default(), window, NoOp, NoOp).unwrap();
 
             // Add embedded files using paths, contents and MIME types.
             webview.embed("/index.html", Stash::new_view(HTML_FILE), "text/html");

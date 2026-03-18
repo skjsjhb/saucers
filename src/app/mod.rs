@@ -7,13 +7,13 @@ mod options;
 
 use std::ffi::c_void;
 use std::marker::PhantomData;
-use std::ptr::null_mut;
 use std::ptr::NonNull;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
+use std::ptr::null_mut;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Weak;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
 use std::thread::JoinHandle;
 use std::thread::ThreadId;
 use std::time::Duration;

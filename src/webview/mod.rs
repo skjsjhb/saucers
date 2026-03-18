@@ -7,11 +7,11 @@ use std::cell::RefCell;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::marker::PhantomData;
-use std::ptr::null_mut;
 use std::ptr::NonNull;
-use std::sync::mpsc::Sender;
+use std::ptr::null_mut;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::sync::mpsc::Sender;
 use std::thread::ThreadId;
 
 pub use events::*;
@@ -113,7 +113,6 @@ impl Webview {
         window: Window,
         event_listener: impl WebviewEventListener + 'static,
         scheme_handler: impl WebviewSchemeHandler + 'static,
-        schemes: Vec<Cow<'static, str>>,
     ) -> crate::error::Result<Self> {
         if !window.is_thread_safe() {
             panic!("webviews must be created on the event thread");
@@ -132,7 +131,7 @@ impl Webview {
             host_tid: std::thread::current().id(),
             event_listener_data: RefCell::new(null_mut()),
             scheme_handler_data: RefCell::new(null_mut()),
-            schemes,
+            schemes: scheme_handler.schemes(),
             window: w,
             _marker: PhantomData,
         }));

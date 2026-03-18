@@ -1,11 +1,11 @@
 use std::cell::Cell;
 
+use saucers::NoOp;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::policy::Policy;
 use saucers::window::Window;
 use saucers::window::WindowEventListener;
-use saucers::NoOp;
 
 /// This example shows how to listen for the close event and prevent the default behavior
 /// conditionally.

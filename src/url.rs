@@ -1,10 +1,10 @@
-use std::ffi::c_char;
 use std::ffi::CString;
+use std::ffi::c_char;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
-use std::ptr::null_mut;
 use std::ptr::NonNull;
+use std::ptr::null_mut;
 use std::str::FromStr;
 
 use saucer_sys::*;

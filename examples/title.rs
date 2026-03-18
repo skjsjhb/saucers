@@ -1,10 +1,10 @@
+use saucers::NoOp;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::webview::Webview;
 use saucers::webview::WebviewEventListener;
 use saucers::webview::WebviewOptions;
 use saucers::window::Window;
-use saucers::NoOp;
 
 /// This example shows a way to sync the window title with the web page.
 /// This shows a way to use the webview event system.
@@ -27,8 +27,7 @@ fn main() {
                 }
             }
 
-            let webview =
-                Webview::new(WebviewOptions::default(), window, WebviewEv, NoOp, vec![]).unwrap();
+            let webview = Webview::new(WebviewOptions::default(), window, WebviewEv, NoOp).unwrap();
 
             webview.set_html("<title>You didn't see anything!</title>");
 

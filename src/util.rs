@@ -1,5 +1,5 @@
-use std::ffi::c_char;
 use std::ffi::CStr;
+use std::ffi::c_char;
 
 /// Copies the given C string into an owned [`String`]. Performs lossy UTF-8 conversion if needed.
 ///

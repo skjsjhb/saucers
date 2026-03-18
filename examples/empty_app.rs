@@ -1,9 +1,9 @@
+use saucers::NoOp;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::webview::Webview;
 use saucers::webview::WebviewOptions;
 use saucers::window::Window;
-use saucers::NoOp;
 
 /// This example shows how to create a well-behaved app with minimal code.
 fn main() {
@@ -17,8 +17,7 @@ fn main() {
             window.set_size((1152, 648));
             window.show();
 
-            let webview =
-                Webview::new(WebviewOptions::default(), window, NoOp, NoOp, vec![]).unwrap();
+            let webview = Webview::new(WebviewOptions::default(), window, NoOp, NoOp).unwrap();
 
             webview.set_url_str("about:blank");
 

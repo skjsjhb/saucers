@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::rc::Weak;
 
+use saucers::NoOp;
 use saucers::app::App;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
@@ -11,7 +12,6 @@ use saucers::webview::Webview;
 use saucers::webview::WebviewEventListener;
 use saucers::webview::WebviewOptions;
 use saucers::window::Window;
-use saucers::NoOp;
 
 /// This example demonstrates how to open navigation requests that creates new windows.
 /// By default, only in-page navigations are allowed. Saucer does not create a new window
@@ -41,14 +41,9 @@ fn main() {
                         new_window.set_size((1152, 648));
                         new_window.show();
 
-                        let new_webview = Webview::new(
-                            WebviewOptions::default(),
-                            new_window,
-                            self.clone(),
-                            NoOp,
-                            vec![],
-                        )
-                        .unwrap();
+                        let new_webview =
+                            Webview::new(WebviewOptions::default(), new_window, self.clone(), NoOp)
+                                .unwrap();
 
                         new_webview.set_url(nav.url());
 
@@ -64,7 +59,7 @@ fn main() {
             window.show();
 
             let webview =
-                Webview::new(WebviewOptions::default(), window, webview_ev, NoOp, vec![]).unwrap();
+                Webview::new(WebviewOptions::default(), window, webview_ev, NoOp).unwrap();
 
             webview.set_html("<a target=\"_new\" href=\"about:blank\">Link</a>");
 
