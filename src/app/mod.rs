@@ -29,7 +29,10 @@ use crate::screen::Screen;
 /// An unprotected owned app handle.
 struct RawApp {
     inner: NonNull<saucer_application>,
+    /// Drop sender for other handles.
     drop_sender: Sender<Box<dyn FnOnce() + Send>>,
+    /// Drop sender for the app itself.
+    app_drop_sender: Sender<Box<dyn FnOnce() + Send>>,
     host_tid: ThreadId,
     _marker: PhantomData<saucer_application>,
 }
@@ -57,7 +60,7 @@ impl Drop for RawApp {
         if self.is_thread_safe() {
             col();
         } else {
-            self.drop_sender.send(Box::new(col)).expect("failed to post app destruction");
+            self.app_drop_sender.send(Box::new(col)).expect("failed to post app destruction");
         }
     }
 }
@@ -66,8 +69,15 @@ impl RawApp {
     pub(crate) fn new(
         inner: NonNull<saucer_application>,
         drop_sender: Sender<Box<dyn FnOnce() + Send>>,
+        app_drop_sender: Sender<Box<dyn FnOnce() + Send>>,
     ) -> Self {
-        Self { inner, drop_sender, host_tid: std::thread::current().id(), _marker: PhantomData }
+        Self {
+            inner,
+            drop_sender,
+            app_drop_sender,
+            host_tid: std::thread::current().id(),
+            _marker: PhantomData,
+        }
     }
 
     fn is_thread_safe(&self) -> bool { self.host_tid == std::thread::current().id() }
@@ -83,15 +93,23 @@ pub struct AppManager {
     raw_opt: RawAppOptions,
     drop_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
     receiver: Receiver<Box<dyn FnOnce() + Send>>,
+    // App needs to be destroyed after all other handles, thus a dedicated channel
+    app_drop_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
+    app_receiver: Receiver<Box<dyn FnOnce() + Send>>,
     _marker: PhantomData<saucer_application>,
 }
 
 impl Drop for AppManager {
     fn drop(&mut self) {
         drop(self.drop_sender.take()); // In case it's not consumed
-
         while let Ok(p) = self.receiver.recv() {
             // SAFETY: This struct is thread-local
+            p();
+        }
+
+        // Now that all handles are destroyed, we can safely destroy the app
+        drop(self.app_drop_sender.take());
+        while let Ok(p) = self.app_receiver.recv() {
             p();
         }
     }
@@ -101,10 +119,13 @@ impl AppManager {
     /// Constructs an app manager from the given options.
     pub fn new(opt: AppOptions) -> Self {
         let (sender, receiver) = std::sync::mpsc::channel();
+        let (app_sender, app_receiver) = std::sync::mpsc::channel();
         Self {
             raw_opt: RawAppOptions::new(opt),
             drop_sender: Some(sender),
             receiver,
+            app_drop_sender: Some(app_sender),
+            app_receiver,
             _marker: PhantomData,
         }
     }
@@ -126,8 +147,12 @@ impl AppManager {
     /// dropped when it exits, which will normally destroy the windows. There are currently two
     /// workarounds:
     ///
-    /// 1. Store the handle at a place which outlives the event loop lifecycle.
+    /// 1. Store the handles at a place which outlives the event loop lifecycle.
     /// 2. Move the handles into the finish callback and drop them there.
+    ///
+    /// Also note that any handle created in the start callback shall live within it (i.e. get
+    /// dropped at least not later than the finish callback). Failing to do so would lead to a
+    /// direct deadlock, as this method will try to join all handles before returning.
     pub fn run(
         mut self,
         start: impl FnOnce(App, &mut FinishListener) + 'static,
@@ -141,7 +166,8 @@ impl AppManager {
         let app = NonNull::new(ptr).ok_or(crate::error::Error::Saucer(ex))?;
 
         let sender = self.drop_sender.take().unwrap();
-        let app = App(Arc::new(RawApp::new(app, sender)));
+        let app_sender = self.app_drop_sender.take().unwrap();
+        let app = App(Arc::new(RawApp::new(app, sender, app_sender)));
 
         // The listener is only dropped after the events are removed
         let evd = EventListenerData::new(&event_listener, app.downgrade());
@@ -159,6 +185,7 @@ impl AppManager {
 
         let cdata = RunCallbackData::new(start, app.clone()).into_raw();
         unsafe {
+            // Callback data is freed in the finish callback
             saucer_application_run(ptr, Some(run_callback_tp), Some(finish_callback_tp), cdata)
         };
 
