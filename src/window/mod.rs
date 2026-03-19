@@ -2,12 +2,11 @@ mod decoration;
 mod edge;
 mod events;
 
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
-use std::ptr::null_mut;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::sync::mpsc::Sender;
@@ -30,12 +29,13 @@ struct RawWindow {
     inner: NonNull<saucer_window>,
     drop_sender: Sender<Box<dyn FnOnce() + Send>>,
     host_tid: ThreadId,
-    event_listener_data: RefCell<*mut EventListenerData>, /* !Send, yet not visible on other
-                                                           * threads */
+    event_listener_data: Cell<*mut EventListenerData>, // For mutability inside Arc
     _marker: PhantomData<saucer_window>,
 }
 
 unsafe impl Send for RawWindow {}
+// SAFETY: Cell is !Sync, but a shared reference to it can never be obtained other than CTOR and
+// Drop, in which we both have mutable access.
 unsafe impl Sync for RawWindow {}
 
 struct RawWindowCleanUp {
@@ -49,7 +49,7 @@ impl Drop for RawWindow {
     fn drop(&mut self) {
         let cl = RawWindowCleanUp {
             inner: self.inner,
-            event_listener_data: *self.event_listener_data.borrow(),
+            event_listener_data: self.event_listener_data.take(),
         };
 
         let col = move || unsafe {
@@ -108,14 +108,14 @@ impl Window {
             inner: wnd,
             drop_sender: app.drop_sender(),
             host_tid: std::thread::current().id(),
-            event_listener_data: RefCell::new(null_mut()),
+            event_listener_data: Cell::default(),
             _marker: PhantomData,
         }));
 
         let data = EventListenerData::new(event_listener, wnd.downgrade());
         let data = Box::into_raw(Box::new(data));
 
-        *wnd.0.event_listener_data.borrow_mut() = data;
+        wnd.0.event_listener_data.replace(data);
 
         macro_rules! bind_event {
             ($ev:expr, $cb:expr) => {

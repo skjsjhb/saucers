@@ -3,12 +3,11 @@ mod options;
 mod script;
 
 use std::borrow::Cow;
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
-use std::ptr::null_mut;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::sync::mpsc::Sender;
@@ -37,8 +36,8 @@ struct RawWebview {
     inner: NonNull<saucer_webview>,
     drop_sender: Sender<Box<dyn FnOnce() + Send>>,
     host_tid: ThreadId,
-    event_listener_data: RefCell<*mut EventListenerData>,
-    scheme_handler_data: RefCell<*mut SchemeHandlerData>,
+    event_listener_data: Cell<*mut EventListenerData>,
+    scheme_handler_data: Cell<*mut SchemeHandlerData>,
     schemes: Vec<Cow<'static, str>>,
     window: Window, // Keep the window alive
     _marker: PhantomData<saucer_webview>,
@@ -61,8 +60,8 @@ impl Drop for RawWebview {
         let cl = RawWebviewCleanUp {
             inner: self.inner,
             schemes: self.schemes.drain(..).collect(),
-            event_listener_data: *self.event_listener_data.borrow_mut(), // Ensure exclusive access
-            scheme_handler_data: *self.scheme_handler_data.borrow_mut(),
+            event_listener_data: self.event_listener_data.take(), // Ensure exclusive access
+            scheme_handler_data: self.scheme_handler_data.take(),
         };
 
         let col = move || unsafe {
@@ -129,8 +128,8 @@ impl Webview {
             inner: wv,
             drop_sender: ds,
             host_tid: std::thread::current().id(),
-            event_listener_data: RefCell::new(null_mut()),
-            scheme_handler_data: RefCell::new(null_mut()),
+            event_listener_data: Cell::default(),
+            scheme_handler_data: Cell::default(),
             schemes: scheme_handler.schemes(),
             window: w,
             _marker: PhantomData,
@@ -142,8 +141,8 @@ impl Webview {
         let scheme_data = SchemeHandlerData::new(scheme_handler, wv.downgrade());
         let scheme_data = Box::into_raw(Box::new(scheme_data));
 
-        *wv.0.event_listener_data.borrow_mut() = data;
-        *wv.0.scheme_handler_data.borrow_mut() = scheme_data;
+        wv.0.event_listener_data.replace(data);
+        wv.0.scheme_handler_data.replace(scheme_data);
 
         for s in &wv.0.schemes {
             use_string!(s: s.as_ref(); unsafe {
