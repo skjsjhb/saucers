@@ -57,11 +57,9 @@ impl Drop for RawApp {
             saucer_application_free(cl.inner.as_ptr());
         };
 
-        if self.is_thread_safe() {
-            col();
-        } else {
-            self.app_drop_sender.send(Box::new(col)).expect("failed to post app destruction");
-        }
+        // Send the cleanup pack even when we're on the event thread, ensuring it's destroyed after
+        // other handles.
+        self.app_drop_sender.send(Box::new(col)).expect("failed to post app destruction");
     }
 }
 
