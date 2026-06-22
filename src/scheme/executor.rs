@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use saucer_sys::*;
@@ -32,7 +31,6 @@ impl From<SchemeError> for saucer_scheme_error {
 /// webview is destroyed.
 pub struct Executor {
     ptr: NonNull<saucer_scheme_executor>,
-    _marker: PhantomData<saucer_scheme_executor>,
 }
 
 unsafe impl Send for Executor {}
@@ -46,7 +44,7 @@ impl Executor {
     /// SAFETY: The pointer must be valid and the returned handle must be dropped before the
     /// webview quits.
     pub(crate) unsafe fn from_ptr(ptr: *mut saucer_scheme_executor) -> Self {
-        Self { ptr: NonNull::new(ptr).expect("invalid scheme executor"), _marker: PhantomData }
+        Self { ptr: NonNull::new(ptr).expect("invalid scheme executor") }
     }
 
     /// Resolves with the given response.

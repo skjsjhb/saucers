@@ -1,6 +1,5 @@
 use std::ffi::CString;
 use std::ffi::c_char;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use saucer_sys::*;
@@ -10,7 +9,6 @@ use crate::macros::use_string;
 /// Options for picking files or folders.
 pub struct PickerOptions {
     ptr: NonNull<saucer_picker_options>,
-    _marker: PhantomData<saucer_picker_options>,
 }
 
 unsafe impl Send for PickerOptions {}
@@ -28,10 +26,7 @@ impl PickerOptions {
     /// Creates picker options with default settings.
     pub fn new() -> Self {
         let ptr = unsafe { saucer_picker_options_new() };
-        Self {
-            ptr: NonNull::new(ptr).expect("picker options should be created"),
-            _marker: PhantomData,
-        }
+        Self { ptr: NonNull::new(ptr).expect("picker options should be created") }
     }
 
     /// Sets the initial path displayed in the picker.

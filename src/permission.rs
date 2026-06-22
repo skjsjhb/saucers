@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use saucer_sys::*;
@@ -38,7 +37,6 @@ impl From<saucer_permission_type> for PermissionType {
 /// A permission request handle.
 pub struct PermissionRequest {
     inner: NonNull<saucer_permission_request>,
-    _marker: PhantomData<saucer_permission_request>,
 }
 
 impl Drop for PermissionRequest {
@@ -53,10 +51,7 @@ impl Clone for PermissionRequest {
 
 impl PermissionRequest {
     pub(crate) unsafe fn from_ptr(ptr: *mut saucer_permission_request) -> Self {
-        Self {
-            inner: NonNull::new(ptr).expect("invalid permission request ptr"),
-            _marker: PhantomData,
-        }
+        Self { inner: NonNull::new(ptr).expect("invalid permission request ptr") }
     }
 
     /// Sets whether to accept the permission request.

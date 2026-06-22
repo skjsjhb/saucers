@@ -6,7 +6,6 @@ use std::borrow::Cow;
 use std::cell::Cell;
 use std::ffi::c_char;
 use std::ffi::c_void;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::sync::Weak;
@@ -40,7 +39,6 @@ struct RawWebview {
     scheme_handler_data: Cell<*mut SchemeHandlerData>,
     schemes: Vec<Cow<'static, str>>,
     window: Window, // Keep the window alive
-    _marker: PhantomData<saucer_webview>,
 }
 
 unsafe impl Send for RawWebview {}
@@ -132,7 +130,6 @@ impl Webview {
             scheme_handler_data: Cell::default(),
             schemes: scheme_handler.schemes(),
             window: w,
-            _marker: PhantomData,
         }));
 
         let data = EventListenerData::new(event_listener, wv.downgrade());

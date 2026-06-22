@@ -1,7 +1,6 @@
 //! Native icon module.
 //!
 //! See [`Icon`] for details.
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use saucer_sys::*;
@@ -12,7 +11,6 @@ use crate::stash::Stash;
 /// A native icon.
 pub struct Icon {
     ptr: NonNull<saucer_icon>,
-    _marker: PhantomData<saucer_icon>,
 }
 
 unsafe impl Send for Icon {}
@@ -25,10 +23,7 @@ impl Drop for Icon {
 impl Clone for Icon {
     fn clone(&self) -> Self {
         let ptr = unsafe { saucer_icon_copy(self.as_ptr()) };
-        Self {
-            ptr: NonNull::new(ptr).expect("copied icon should be non-null"),
-            _marker: PhantomData,
-        }
+        Self { ptr: NonNull::new(ptr).expect("copied icon should be non-null") }
     }
 }
 
@@ -39,7 +34,7 @@ impl AsRef<Icon> for Icon {
 impl Icon {
     pub(crate) unsafe fn from_ptr(ptr: *mut saucer_icon) -> Self {
         let ptr = NonNull::new(ptr).expect("icon ptr should be non-null");
-        Self { ptr, _marker: PhantomData }
+        Self { ptr }
     }
 
     /// Loads an icon from the given file.
@@ -52,7 +47,7 @@ impl Icon {
 
         let ptr = NonNull::new(ptr).ok_or(crate::error::Error::Saucer(ex))?;
 
-        Ok(Self { ptr, _marker: PhantomData })
+        Ok(Self { ptr })
     }
 
     /// Loads an icon from the given [`Stash`].
@@ -66,7 +61,7 @@ impl Icon {
         };
 
         let ptr = NonNull::new(ptr).ok_or(crate::error::Error::Saucer(ex))?;
-        Ok(Self { ptr, _marker: PhantomData })
+        Ok(Self { ptr })
     }
 
     /// Checks whether the icon is empty.

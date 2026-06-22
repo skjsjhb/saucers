@@ -5,7 +5,6 @@
 mod picker;
 
 use std::ffi::c_char;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 pub use picker::*;
@@ -20,7 +19,6 @@ use crate::util::inflate_strings;
 pub struct Desktop {
     ptr: NonNull<saucer_desktop>,
     _app: App, // Prevent the app from being dropped when the module is still being used
-    _marker: PhantomData<saucer_desktop>,
 }
 
 unsafe impl Send for Desktop {}
@@ -39,7 +37,6 @@ impl Desktop {
         Self {
             ptr: NonNull::new(ptr).expect("desktop module should be created"),
             _app: app.clone(),
-            _marker: PhantomData,
         }
     }
 

@@ -2,7 +2,6 @@ use std::ffi::CString;
 use std::ffi::c_char;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::ptr::null_mut;
 use std::str::FromStr;
@@ -15,7 +14,6 @@ use crate::macros::use_string;
 /// A URL handle backed by an underlying native URL object.
 pub struct Url {
     inner: NonNull<saucer_url>,
-    _marker: PhantomData<saucer_url>,
 }
 
 unsafe impl Send for Url {}
@@ -42,7 +40,7 @@ impl FromStr for Url {
 impl Url {
     pub(crate) unsafe fn from_ptr(ptr: *mut saucer_url, ex: i32) -> crate::error::Result<Self> {
         if let Some(ptr) = NonNull::new(ptr) {
-            Ok(Self { inner: ptr, _marker: PhantomData })
+            Ok(Self { inner: ptr })
         } else {
             Err(crate::error::Error::Saucer(ex))
         }
@@ -71,7 +69,7 @@ impl Url {
             saucer_url_new_opts(scheme, host, port, path)
         });
 
-        Self { inner: NonNull::new(ptr).expect("invalid URL ptr"), _marker: PhantomData }
+        Self { inner: NonNull::new(ptr).expect("invalid URL ptr") }
     }
 
     /// Creates a file URL using the given path.

@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use saucer_sys::*;
@@ -22,7 +21,6 @@ pub struct WebviewOptions {
 
 pub(crate) struct RawWebviewOptions {
     inner: NonNull<saucer_webview_options>,
-    _marker: PhantomData<saucer_webview_options>,
 }
 
 impl Drop for RawWebviewOptions {
@@ -60,7 +58,7 @@ impl RawWebviewOptions {
             }
         }
 
-        Self { inner, _marker: PhantomData }
+        Self { inner }
     }
 
     pub(crate) fn as_ptr(&self) -> *mut saucer_webview_options { self.inner.as_ptr() }

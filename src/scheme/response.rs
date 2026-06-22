@@ -9,7 +9,7 @@ use crate::stash::Stash;
 /// Contains response details to reply a request to a custom scheme.
 pub struct Response<'a> {
     ptr: NonNull<saucer_scheme_response>,
-    _marker: PhantomData<(saucer_scheme_response, &'a ())>,
+    _marker: PhantomData<&'a ()>,
 }
 
 unsafe impl Send for Response<'_> {}

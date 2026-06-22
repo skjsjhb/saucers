@@ -5,7 +5,6 @@ mod events;
 use std::cell::Cell;
 use std::ffi::c_char;
 use std::ffi::c_void;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::sync::Weak;
@@ -30,7 +29,6 @@ struct RawWindow {
     drop_sender: Sender<Box<dyn FnOnce() + Send>>,
     host_tid: ThreadId,
     event_listener_data: Cell<*mut EventListenerData>, // For mutability inside Arc
-    _marker: PhantomData<saucer_window>,
 }
 
 unsafe impl Send for RawWindow {}
@@ -109,7 +107,6 @@ impl Window {
             drop_sender: app.drop_sender(),
             host_tid: std::thread::current().id(),
             event_listener_data: Cell::default(),
-            _marker: PhantomData,
         }));
 
         let data = EventListenerData::new(event_listener, wnd.downgrade());

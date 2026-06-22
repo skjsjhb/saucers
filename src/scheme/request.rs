@@ -1,5 +1,4 @@
 use std::ffi::c_char;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use saucer_sys::*;
@@ -12,7 +11,6 @@ use crate::util::inflate_strings;
 /// Contains request details of a request to a custom scheme.
 pub struct Request {
     ptr: NonNull<saucer_scheme_request>,
-    _marker: PhantomData<saucer_scheme_request>,
 }
 
 // !Send + !Sync as we can't guarantee the safety of reading headers & body.
@@ -25,7 +23,7 @@ impl Request {
     /// SAFETY: The pointer must be valid, and the returned handle must be dropped before leaving
     /// the request callback.
     pub(crate) unsafe fn from_ptr(ptr: *mut saucer_scheme_request) -> Self {
-        Self { ptr: NonNull::new(ptr).expect("invalid scheme request ptr"), _marker: PhantomData }
+        Self { ptr: NonNull::new(ptr).expect("invalid scheme request ptr") }
     }
 
     /// Gets the request headers.

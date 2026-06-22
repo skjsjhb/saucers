@@ -6,7 +6,6 @@ mod events;
 mod options;
 
 use std::ffi::c_void;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::ptr::null_mut;
 use std::sync::Arc;
@@ -34,7 +33,6 @@ struct RawApp {
     /// Drop sender for the app itself.
     app_drop_sender: Sender<Box<dyn FnOnce() + Send>>,
     host_tid: ThreadId,
-    _marker: PhantomData<saucer_application>,
 }
 
 // SAFETY: App handles are thread-safe for dispatching, and dropping is handled by the collector.
@@ -74,7 +72,6 @@ impl RawApp {
             drop_sender,
             app_drop_sender,
             host_tid: std::thread::current().id(),
-            _marker: PhantomData,
         }
     }
 
@@ -94,7 +91,6 @@ pub struct AppManager {
     // App needs to be destroyed after all other handles, thus a dedicated channel
     app_drop_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
     app_receiver: Receiver<Box<dyn FnOnce() + Send>>,
-    _marker: PhantomData<saucer_application>,
 }
 
 impl Drop for AppManager {
@@ -124,7 +120,6 @@ impl AppManager {
             receiver,
             app_drop_sender: Some(app_sender),
             app_receiver,
-            _marker: PhantomData,
         }
     }
 

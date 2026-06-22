@@ -4,7 +4,6 @@
 use std::ffi::CString;
 use std::ffi::c_char;
 use std::ffi::c_int;
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use saucer_sys::*;
@@ -36,7 +35,6 @@ impl AppOptions {
 pub(crate) struct RawAppOptions {
     inner: NonNull<saucer_application_options>,
     args: Vec<*mut c_char>,
-    _marker: PhantomData<saucer_application_options>,
 }
 
 impl Drop for RawAppOptions {
@@ -81,7 +79,7 @@ impl RawAppOptions {
             );
         }
 
-        Self { inner, args, _marker: PhantomData }
+        Self { inner, args }
     }
 
     pub(crate) fn as_ptr(&self) -> *mut saucer_application_options { self.inner.as_ptr() }

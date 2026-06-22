@@ -12,7 +12,7 @@ pub struct Stash<'a> {
     /// When set to true, does not free the stash when this handle is dropped. This is required to
     /// transfer the inner stash object to the C API.
     leak: bool,
-    _marker: PhantomData<(saucer_stash, &'a ())>,
+    _marker: PhantomData<&'a ()>,
 }
 
 unsafe impl Send for Stash<'_> {}

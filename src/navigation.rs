@@ -12,7 +12,7 @@ use crate::url::Url;
 /// inside the event handler. It's associated lifetime indicates the validity.
 pub struct Navigation<'a> {
     ptr: NonNull<saucer_navigation>,
-    _marker: PhantomData<(saucer_navigation, &'a ())>, // The opaque handle is still owned
+    _marker: PhantomData<&'a ()>,
 }
 
 // !Send + !Sync as it may call thread-unsafe methods

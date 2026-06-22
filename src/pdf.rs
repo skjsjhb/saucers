@@ -1,7 +1,6 @@
 //! PDF module.
 //!
 //! See [`Pdf`] for details.
-use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use saucer_sys::*;
@@ -16,7 +15,6 @@ use crate::webview::Webview;
 pub struct Pdf<'a> {
     ptr: NonNull<saucer_pdf>,
     _webview: &'a Webview,
-    _marker: PhantomData<saucer_pdf>,
 }
 
 unsafe impl Send for Pdf<'_> {}
@@ -33,7 +31,6 @@ impl<'a> Pdf<'a> {
         Self {
             ptr: NonNull::new(ptr).expect("PDF module should be created"),
             _webview: w,
-            _marker: PhantomData,
         }
     }
 
@@ -64,7 +61,6 @@ impl From<Layout> for saucer_pdf_layout {
 /// Settings for PDF printing.
 pub struct PdfSettings {
     ptr: NonNull<saucer_pdf_settings>,
-    _marker: PhantomData<saucer_pdf_settings>,
 }
 
 unsafe impl Send for PdfSettings {}
@@ -78,10 +74,7 @@ impl PdfSettings {
     /// Creates a settings object that saves to the specified path.
     pub fn new(fp: impl Into<Vec<u8>>) -> Self {
         let ptr = use_string!(fp; unsafe { saucer_pdf_settings_new(fp) });
-        Self {
-            ptr: NonNull::new(ptr).expect("PDF settings should be created"),
-            _marker: PhantomData,
-        }
+        Self { ptr: NonNull::new(ptr).expect("PDF settings should be created") }
     }
 
     /// Sets the output orientation.
