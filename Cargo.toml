@@ -7,7 +7,7 @@ license = "MIT"
 homepage = "https://github.com/skjsjhb/saucers"
 repository = "https://github.com/skjsjhb/saucers"
 readme = "README.md"
-rust-version = "1.94.0"
+rust-version = "1.88.0"
 exclude = [
     "**/.github/**/*",
     "rust-toolchain.toml",
