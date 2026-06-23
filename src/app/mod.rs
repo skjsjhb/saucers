@@ -67,12 +67,7 @@ impl RawApp {
         drop_sender: Sender<Box<dyn FnOnce() + Send>>,
         app_drop_sender: Sender<Box<dyn FnOnce() + Send>>,
     ) -> Self {
-        Self {
-            inner,
-            drop_sender,
-            app_drop_sender,
-            host_tid: std::thread::current().id(),
-        }
+        Self { inner, drop_sender, app_drop_sender, host_tid: std::thread::current().id() }
     }
 
     fn is_thread_safe(&self) -> bool { self.host_tid == std::thread::current().id() }

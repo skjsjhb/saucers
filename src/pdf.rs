@@ -28,10 +28,7 @@ impl<'a> Pdf<'a> {
     /// Creates and mounts the PDF module to the given [`Webview`].
     pub fn new(w: &'a Webview) -> Self {
         let ptr = unsafe { saucer_pdf_new(w.as_ptr()) };
-        Self {
-            ptr: NonNull::new(ptr).expect("PDF module should be created"),
-            _webview: w,
-        }
+        Self { ptr: NonNull::new(ptr).expect("PDF module should be created"), _webview: w }
     }
 
     /// Prints the content of the current page into a PDF file using the given settings.
