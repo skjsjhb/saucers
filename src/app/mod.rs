@@ -83,7 +83,7 @@ impl RawApp {
 /// A struct that manages apps and collects all handles.
 ///
 /// This struct never owns an app handle. Instead, it creates one on-demand when starting the event
-/// loop, and then forgets it. Handles are collected when this struct is dropped.
+/// loop, and collects them before exiting.
 pub struct AppManager {
     raw_opt: RawAppOptions,
     drop_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
@@ -93,9 +93,13 @@ pub struct AppManager {
     app_receiver: Receiver<Box<dyn FnOnce() + Send>>,
 }
 
-impl Drop for AppManager {
-    fn drop(&mut self) {
-        drop(self.drop_sender.take()); // In case it's not consumed
+impl AppManager {
+    /// Attempts to collect and cleanup all handles, blocking if necessary.
+    fn collect_handles(mut self) {
+        drop(self.drop_sender.take());
+
+        // As long as there is still one sender alive, this call would block, which guarantees that
+        // no handles shall remain reachable after this loop.
         while let Ok(p) = self.receiver.recv() {
             // SAFETY: This struct is thread-local
             p();
@@ -107,9 +111,7 @@ impl Drop for AppManager {
             p();
         }
     }
-}
 
-impl AppManager {
     /// Constructs an app manager from the given options.
     pub fn new(opt: AppOptions) -> Self {
         let (sender, receiver) = std::sync::mpsc::channel();
@@ -182,13 +184,12 @@ impl AppManager {
             saucer_application_run(ptr, Some(run_callback_tp), Some(finish_callback_tp), cdata)
         };
 
+        drop(app); // Ensure the handle is kept to the very end
+        self.collect_handles();
+
         let _ = unsafe { Box::from_raw(data) };
 
-        drop(app); // Ensure the handle is kept to the very end
-
         Ok(())
-
-        // All other handles will be collected when dropping self
     }
 }
 
