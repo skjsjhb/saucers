@@ -3,6 +3,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use libtest_mimic::Arguments;
+use libtest_mimic::Trial;
 use saucers::NoOp;
 use saucers::app::App;
 use saucers::app::AppEventListener;
@@ -25,10 +27,22 @@ use saucers::webview::WebviewSchemeHandler;
 use saucers::window::Window;
 
 fn main() {
+    let mut args = Arguments::from_args();
+
+    args.test_threads = Some(1);
+
+    let tests = vec![Trial::test("app_lifecycle", || {
+        app_lifecycle();
+        Ok(())
+    })];
+
+    libtest_mimic::run(&args, tests).exit();
+}
+
+fn app_lifecycle() {
     register_scheme("test");
 
-    let app = AppManager::new(AppOptions::new_with_id("hello"));
-
+    let app = AppManager::new(AppOptions::new_with_id("test"));
     let counter = Arc::new(());
 
     #[derive(Default)]
@@ -57,7 +71,7 @@ fn main() {
 
     #[derive(Clone)]
     struct SharedTrace {
-        trace: Rc<RefCell<Trace>>,
+        trace: Rc<RefCell<Trace>>, // If `borrow_mut` panics, the event listener is unsound!
         _counter: Arc<()>,
     }
 
@@ -103,13 +117,13 @@ fn main() {
     };
     let trace_webview = trace_app.clone();
 
-    const HTML: &str = r#"
+    const PAGE_HTML: &str = r#"
         <script>
             window.saucer.internal.message('Hello');
         </script>
     "#;
 
-    const URL: &str = "test://some/content";
+    const SCHEME_URL: &str = "test://some/content";
 
     struct SchemeHd;
 
@@ -117,8 +131,15 @@ fn main() {
         fn schemes(&self) -> Vec<Cow<'static, str>> { vec!["test".into()] }
 
         fn handle_scheme(&self, _webview: Webview, req: Request, exc: Executor) {
-            assert_eq!(req.url().content(), URL, "URL content should be correct");
-            exc.accept(Response::new(Stash::new_view(HTML.as_bytes()), "text/html"));
+            assert_eq!(
+                req.url().content(),
+                SCHEME_URL,
+                "URL content should be correct"
+            );
+            exc.accept(Response::new(
+                Stash::new_view(PAGE_HTML.as_bytes()),
+                "text/html",
+            ));
         }
     }
 
@@ -133,7 +154,7 @@ fn main() {
                     Webview::new(WebviewOptions::default(), wnd, trace_webview, SchemeHd).unwrap();
 
                 wv.inject("window._injected = true;", ScriptTime::Creation, true, true);
-                wv.set_url_str(URL);
+                wv.set_url_str(SCHEME_URL);
 
                 fin.set(move |_| {
                     drop(wv);

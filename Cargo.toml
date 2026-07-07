@@ -21,8 +21,16 @@ saucer-sys = { git = "https://github.com/skarl3t/saucer-sys", rev = "e26b5bd" }
 [build-dependencies]
 build-target = "0.8.0"
 
+[dev-dependencies]
+libtest-mimic = "0.8.2"
+
 [lib]
 bench = false
+
+[[test]]
+name = "basic"
+path = "tests/basic.rs"
+harness = false
 
 [features]
 gen-bindings = ["saucer-sys/gen-bindings"]
