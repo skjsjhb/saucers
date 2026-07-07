@@ -5,9 +5,10 @@ use crate::policy::Policy;
 pub trait AppEventListener {
     /// Invoked when the app is about to quit.
     ///
-    /// Note that this event may be fired multiple times event if it's [`Policy::Allow`]ed, as it's
-    /// actually fired inside [`App::quit`]. This also means that [`App::quit`] must not be called
-    /// in this listener. Consider using [`crate::app::FinishListener`] if you need a one-time
-    /// callback.
+    /// Note that this event may be fired multiple times event if it's
+    /// [`Policy::Allow`]ed, as it's actually fired inside [`App::quit`].
+    /// This also means that [`App::quit`] must not be called
+    /// in this listener. Consider using [`crate::app::FinishListener`] if you
+    /// need a one-time callback.
     fn on_quit(&self, _app: App) -> Policy { Policy::Allow }
 }

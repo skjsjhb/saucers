@@ -13,25 +13,29 @@ pub struct Response<'a> {
 }
 
 unsafe impl Send for Response<'_> {}
-// !Sync as the stash is !Sync, and there are methods than can observe it via the pointer.
+// !Sync as the stash is !Sync, and there are methods than can observe it via
+// the pointer.
 
 impl<'a> Drop for Response<'a> {
     fn drop(&mut self) { unsafe { saucer_scheme_response_free(self.ptr.as_ptr()) } }
 }
 
 impl<'a> Response<'a> {
-    /// Creates a new response from the given [`Stash`] and MIME type. Also appends a `Content-Type`
-    /// header with the specified MIME type.
+    /// Creates a new response from the given [`Stash`] and MIME type. Also
+    /// appends a `Content-Type` header with the specified MIME type.
     ///
-    /// Although the stash handle is consumed, this method will always copy the stash, thus
-    /// providing a large owned stash can be inefficient.
+    /// Although the stash handle is consumed, this method will always copy the
+    /// stash, thus providing a large owned stash can be inefficient.
     pub fn new(data: Stash<'a>, mime: impl Into<Vec<u8>>) -> Self {
         // Stash is copied
         let ptr = use_string!(mime; unsafe {
            saucer_scheme_response_new(data.as_ptr(), mime)
         });
 
-        Self { ptr: NonNull::new(ptr).expect("invalid response data"), _marker: PhantomData }
+        Self {
+            ptr: NonNull::new(ptr).expect("invalid response data"),
+            _marker: PhantomData,
+        }
     }
 
     /// Sets the response status code.

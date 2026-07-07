@@ -5,12 +5,12 @@ use saucer_sys::*;
 
 /// An immutable interface to interact with binary data.
 ///
-/// A stash can own its data or borrow data defined elsewhere (as long as it outlives the stash
-/// handle).
+/// A stash can own its data or borrow data defined elsewhere (as long as it
+/// outlives the stash handle).
 pub struct Stash<'a> {
     ptr: NonNull<saucer_stash>,
-    /// When set to true, does not free the stash when this handle is dropped. This is required to
-    /// transfer the inner stash object to the C API.
+    /// When set to true, does not free the stash when this handle is dropped.
+    /// This is required to transfer the inner stash object to the C API.
     leak: bool,
     _marker: PhantomData<&'a ()>,
 }
@@ -60,28 +60,33 @@ impl Stash<'_> {
         Self::from_ptr(ptr)
     }
 
-    /// Creates a lazy-populated stash whose content is populated by evaluating the populator on
-    /// demand.
+    /// Creates a lazy-populated stash whose content is populated by evaluating
+    /// the populator on demand.
     ///
-    /// The provided populator is polled at most once when reading the stash and will drop itself
-    /// after the invocation. However, a stash may be dropped without being read, and the content of
-    /// the populator is then leaked. Given such limitation, unless the usage of the stash can be
-    /// known in advance (like feeding a [`crate::scheme::Response`]), usage of this method is
-    /// discouraged.
+    /// The provided populator is polled at most once when reading the stash and
+    /// will drop itself after the invocation. However, a stash may be
+    /// dropped without being read, and the content of the populator is then
+    /// leaked. Given such limitation, unless the usage of the stash can be
+    /// known in advance (like feeding a [`crate::scheme::Response`]), usage of
+    /// this method is discouraged.
     ///
-    /// Despite the above limitations, this method can be useful to create a stash that "carries"
-    /// owned data, but without copying or the need of explicitly moving data with a borrowed stash.
+    /// Despite the above limitations, this method can be useful to create a
+    /// stash that "carries" owned data, but without copying or the need of
+    /// explicitly moving data with a borrowed stash.
     ///
-    /// This method is disabled for now as it requires [`Self::data`] to take `&mut self`, breaks
-    /// [`Sync`] and [`Clone`]. Also, the safety of passing a lazy stash into C APIs are not yet
-    /// fully verified.
+    /// This method is disabled for now as it requires [`Self::data`] to take
+    /// `&mut self`, breaks [`Sync`] and [`Clone`]. Also, the safety of
+    /// passing a lazy stash into C APIs are not yet fully verified.
     #[doc(hidden)]
     #[cfg(false)]
     pub fn new_lazy(populator: impl FnOnce() -> Stash<'static> + Send + 'static) -> Self {
-        // A lazy stash internally caches the value and will call the populator at most once.
-        // However, it's uncertain when it will be called, thus Send + 'static. The returned stash
-        // may also be used for unknown lifetime, thus 'static.
-        let data = LazyCallbackData { callback: Box::new(populator) };
+        // A lazy stash internally caches the value and will call the populator at most
+        // once. However, it's uncertain when it will be called, thus Send +
+        // 'static. The returned stash may also be used for unknown lifetime,
+        // thus 'static.
+        let data = LazyCallbackData {
+            callback: Box::new(populator),
+        };
         let data = Box::into_raw(Box::new(data)) as *mut c_void;
         let ptr = unsafe { saucer_stash_new_lazy(Some(stash_lazy_tp), data) };
 
@@ -93,9 +98,9 @@ impl Stash<'_> {
 
     /// Returns the inner data.
     pub fn data(&self) -> &[u8] {
-        // Each stash should have a non-null data pointer (empty stashes have empty vectors).
-        // Borrowed stashes can only be created by user and all references should be nonnull in
-        // Rust.
+        // Each stash should have a non-null data pointer (empty stashes have empty
+        // vectors). Borrowed stashes can only be created by user and all
+        // references should be nonnull in Rust.
         let ptr = unsafe { saucer_stash_data(self.ptr.as_ptr()) };
         unsafe { std::slice::from_raw_parts(ptr, self.size()) }
     }

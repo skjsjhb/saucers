@@ -69,7 +69,9 @@ impl Url {
             saucer_url_new_opts(scheme, host, port, path)
         });
 
-        Self { inner: NonNull::new(ptr).expect("invalid URL ptr") }
+        Self {
+            inner: NonNull::new(ptr).expect("invalid URL ptr"),
+        }
     }
 
     /// Creates a file URL using the given path.
@@ -139,7 +141,8 @@ impl Url {
         String::from_utf8_lossy(&st).into_owned()
     }
 
-    /// Gets the URL password. An empty string is returned if the URL has no password.
+    /// Gets the URL password. An empty string is returned if the URL has no
+    /// password.
     pub fn password(&self) -> String {
         let st = load_range!(ptr[size] = 0u8; {
             unsafe { saucer_url_password(self.as_ptr(), ptr as *mut c_char, size) };

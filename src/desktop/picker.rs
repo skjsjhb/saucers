@@ -26,7 +26,9 @@ impl PickerOptions {
     /// Creates picker options with default settings.
     pub fn new() -> Self {
         let ptr = unsafe { saucer_picker_options_new() };
-        Self { ptr: NonNull::new(ptr).expect("picker options should be created") }
+        Self {
+            ptr: NonNull::new(ptr).expect("picker options should be created"),
+        }
     }
 
     /// Sets the initial path displayed in the picker.

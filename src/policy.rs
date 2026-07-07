@@ -1,6 +1,7 @@
 use saucer_sys::*;
 
-/// The policy towards an event. Can be used to allow or block the default behavior.
+/// The policy towards an event. Can be used to allow or block the default
+/// behavior.
 pub enum Policy {
     Allow,
     Block,

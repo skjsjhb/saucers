@@ -22,7 +22,8 @@ fn main() {
             webview.set_url_str("about:blank");
 
             // Make sure to capture the webview somewhere, or it will be closed immediately!
-            // We can just put it in the finish callback, it will be dropped when the app quits.
+            // We can just put it in the finish callback, it will be dropped when the app
+            // quits.
             fin.set(|_| drop(webview));
         },
         NoOp,

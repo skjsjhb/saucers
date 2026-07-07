@@ -14,8 +14,9 @@ use crate::webview::Webview;
 
 /// A trait containing webview events.
 ///
-/// Because the listener is stored inside the [`Webview`] handle, capturing any handle directly will
-/// form circular references and prevent them from dropping. It's advised to use the passed argument
+/// Because the listener is stored inside the [`Webview`] handle, capturing any
+/// handle directly will form circular references and prevent them from
+/// dropping. It's advised to use the passed argument
 /// or [`crate::webview::WebviewRef`] instead.
 #[allow(unused)] // Template
 pub trait WebviewEventListener {
@@ -25,7 +26,9 @@ pub trait WebviewEventListener {
     }
 
     /// Fired when the webview enters or leaves fullscreen.
-    fn on_fullscreen(&self, webview: Webview, is_fullscreen: bool) -> Policy { Policy::Allow }
+    fn on_fullscreen(&self, webview: Webview, is_fullscreen: bool) -> Policy {
+        Policy::Allow
+    }
 
     /// Fired when the DOM is ready.
     fn on_dom_ready(&self, webview: Webview) {}
@@ -34,7 +37,9 @@ pub trait WebviewEventListener {
     fn on_navigated(&self, webview: Webview, url: Url) {}
 
     /// Fired when the webview is about to navigate to a new URL.
-    fn on_navigate(&self, webview: Webview, nav: &Navigation) -> Policy { Policy::Allow }
+    fn on_navigate(&self, webview: Webview, nav: &Navigation) -> Policy {
+        Policy::Allow
+    }
 
     /// Fired when the webview sends a message.
     fn on_message(&self, webview: Webview, msg: Cow<str>) -> HandleStatus {
@@ -58,12 +63,15 @@ pub trait WebviewEventListener {
 #[allow(unused)] // Template
 pub trait WebviewSchemeHandler {
     /// Returns all schemes this handler intends to process.
-    fn schemes(&self) -> Vec<Cow<'static, str>> { Vec::default() }
+    fn schemes(&self) -> Vec<Cow<'static, str>> {
+        Vec::default()
+    }
 
     /// Handles a scheme request.
     ///
-    /// This method is called for all requests coming from the given webview and does not
-    /// distinguish between protocols. Check [`Request::url`] if you have multiple schemes.
+    /// This method is called for all requests coming from the given webview and
+    /// does not distinguish between protocols. Check [`Request::url`] if
+    /// you have multiple schemes.
     fn handle_scheme(&self, webview: Webview, req: Request, exc: Executor) {
         exc.reject(SchemeError::NotFound)
     }

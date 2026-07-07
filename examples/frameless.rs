@@ -6,8 +6,9 @@ use saucers::webview::WebviewOptions;
 use saucers::window::Window;
 use saucers::window::WindowDecoration;
 
-/// This example shows how to create a frameless window and use the `data-webview-drag` attribute to
-/// allow dragging the window using an HTML element.
+/// This example shows how to create a frameless window and use the
+/// `data-webview-drag` attribute to allow dragging the window using an HTML
+/// element.
 fn main() {
     let app = AppManager::new(AppOptions::new_with_id("frameless"));
 

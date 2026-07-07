@@ -31,7 +31,8 @@ impl Drop for Desktop {
 impl Desktop {
     /// Creates and mounts the desktop module to the given [`App`].
     ///
-    /// The provided app handle is captured within the desktop mod, which may affect dropping.
+    /// The provided app handle is captured within the desktop mod, which may
+    /// affect dropping.
     pub fn new(app: &App) -> Self {
         let ptr = unsafe { saucer_desktop_new(app.as_ptr()) };
         Self {
@@ -44,9 +45,10 @@ impl Desktop {
     ///
     /// # Security Concerns
     ///
-    /// This method passes the URL to the underlying system API (e.g. `open` command on Windows)
-    /// without validation. Passing any user input can cause **SEVERE SECURITY RISK** to the
-    /// application. It's highly recommended to provide only controlled content to this method.
+    /// This method passes the URL to the underlying system API (e.g. `open`
+    /// command on Windows) without validation. Passing any user input can
+    /// cause **SEVERE SECURITY RISK** to the application. It's highly
+    /// recommended to provide only controlled content to this method.
     pub fn open(&self, url: impl Into<Vec<u8>>) {
         use_string!(url; unsafe { saucer_desktop_open(self.ptr.as_ptr(), url) });
     }

@@ -25,9 +25,10 @@ impl From<SchemeError> for saucer_scheme_error {
 
 /// The executor object used to resolve or reject a request to a custom scheme.
 ///
-/// An executor is passed as an argument to the scheme handler when a request comes. The handler can
-/// then [`Executor::accept`] or [`Executor::reject`] the request. Crucially, the executor is never
-/// passed as value, only shared reference, which is important to prevent use-after-free in case the
+/// An executor is passed as an argument to the scheme handler when a request
+/// comes. The handler can then [`Executor::accept`] or [`Executor::reject`] the
+/// request. Crucially, the executor is never passed as value, only shared
+/// reference, which is important to prevent use-after-free in case the
 /// webview is destroyed.
 pub struct Executor {
     ptr: NonNull<saucer_scheme_executor>,
@@ -41,15 +42,18 @@ impl Drop for Executor {
 }
 
 impl Executor {
-    /// SAFETY: The pointer must be valid and the returned handle must be dropped before the
-    /// webview quits.
+    /// SAFETY: The pointer must be valid and the returned handle must be
+    /// dropped before the webview quits.
     pub(crate) unsafe fn from_ptr(ptr: *mut saucer_scheme_executor) -> Self {
-        Self { ptr: NonNull::new(ptr).expect("invalid scheme executor") }
+        Self {
+            ptr: NonNull::new(ptr).expect("invalid scheme executor"),
+        }
     }
 
     /// Resolves with the given response.
     ///
-    /// The response is consumed, yet it's unclear when it will be polled, thus it's 'static.
+    /// The response is consumed, yet it's unclear when it will be polled, thus
+    /// it's 'static.
     pub fn accept(self, res: Response<'static>) {
         // The inner stash is copied for unbound usage, thus 'static
         unsafe { saucer_scheme_executor_accept(self.ptr.as_ptr(), res.as_ptr()) }

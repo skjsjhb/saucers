@@ -48,7 +48,10 @@ fn main() {
             assert!(self.load_fired, "load event should be fired");
             assert!(self.dom_ready_fired, "DOM ready event should be fired");
             assert!(self.navigate_fired, "navigate event should be fired");
-            assert!(self.inject_script_executed, "inject script should be executed");
+            assert!(
+                self.inject_script_executed,
+                "inject script should be executed"
+            );
         }
     }
 
@@ -94,7 +97,10 @@ fn main() {
         }
     }
 
-    let trace_app = SharedTrace { trace: trace.clone(), _counter: counter.clone() };
+    let trace_app = SharedTrace {
+        trace: trace.clone(),
+        _counter: counter.clone(),
+    };
     let trace_webview = trace_app.clone();
 
     const HTML: &str = r#"

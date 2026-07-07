@@ -7,9 +7,10 @@ use crate::url::Url;
 
 /// A navigation descriptor.
 ///
-/// Because the navigation descriptor interacts with underlying request object to fetch fields like
-/// [`Self::url`], it can't be safely owned / shared / sent and is only safe when being "confined"
-/// inside the event handler. It's associated lifetime indicates the validity.
+/// Because the navigation descriptor interacts with underlying request object
+/// to fetch fields like [`Self::url`], it can't be safely owned / shared / sent
+/// and is only safe when being "confined" inside the event handler. It's
+/// associated lifetime indicates the validity.
 pub struct Navigation<'a> {
     ptr: NonNull<saucer_navigation>,
     _marker: PhantomData<&'a ()>,

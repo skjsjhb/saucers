@@ -1,7 +1,7 @@
 //! Scheme handling module.
 //!
-//! This module includes [`Executor`], [`Request`] and [`Response`] to handle requests to custom
-//! schemes.
+//! This module includes [`Executor`], [`Request`] and [`Response`] to handle
+//! requests to custom schemes.
 mod executor;
 mod request;
 mod response;

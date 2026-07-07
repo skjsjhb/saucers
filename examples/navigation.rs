@@ -13,10 +13,11 @@ use saucers::webview::WebviewEventListener;
 use saucers::webview::WebviewOptions;
 use saucers::window::Window;
 
-/// This example demonstrates how to open navigation requests that creates new windows.
-/// By default, only in-page navigations are allowed. Saucer does not create a new window
-/// automatically when the navigation requests one. To enable such behavior, the user will need to
-/// implement custom window managing.
+/// This example demonstrates how to open navigation requests that creates new
+/// windows. By default, only in-page navigations are allowed. Saucer does not
+/// create a new window automatically when the navigation requests one. To
+/// enable such behavior, the user will need to implement custom window
+/// managing.
 fn main() {
     let app = AppManager::new(AppOptions::new_with_id("navigation"));
 
@@ -32,7 +33,10 @@ fn main() {
                 app: App,
             }
 
-            let webview_ev = WebviewEv { webviews: Rc::downgrade(&webviews), app: app.clone() };
+            let webview_ev = WebviewEv {
+                webviews: Rc::downgrade(&webviews),
+                app: app.clone(),
+            };
 
             impl WebviewEventListener for WebviewEv {
                 fn on_navigate(&self, _webview: Webview, nav: &Navigation) -> Policy {
@@ -47,7 +51,11 @@ fn main() {
 
                         new_webview.set_url(nav.url());
 
-                        self.webviews.upgrade().unwrap().borrow_mut().push(new_webview);
+                        self.webviews
+                            .upgrade()
+                            .unwrap()
+                            .borrow_mut()
+                            .push(new_webview);
                     }
                     Policy::Allow
                 }

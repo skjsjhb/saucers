@@ -14,8 +14,8 @@ pub struct Screen {
 }
 
 impl Screen {
-    /// Takes the given raw pointer and converts it into a [`Screen`]. Returns [`None`] if the
-    /// pointer is null.
+    /// Takes the given raw pointer and converts it into a [`Screen`]. Returns
+    /// [`None`] if the pointer is null.
     pub(crate) unsafe fn from_raw(ptr: *mut saucer_screen) -> Option<Self> {
         if ptr.is_null() {
             return None;
@@ -35,6 +35,10 @@ impl Screen {
 
         unsafe { saucer_screen_free(ptr) };
 
-        Some(Self { name, size: (w, h), pos: (x, y) })
+        Some(Self {
+            name,
+            size: (w, h),
+            pos: (x, y),
+        })
     }
 }

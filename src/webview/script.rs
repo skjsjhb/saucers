@@ -18,7 +18,11 @@ impl From<ScriptTime> for saucer_script_time {
 pub struct ScriptId(usize);
 
 impl ScriptId {
-    pub(crate) fn from_usize(id: usize) -> Self { Self(id) }
+    pub(crate) fn from_usize(id: usize) -> Self {
+        Self(id)
+    }
 
-    pub(crate) fn as_usize(&self) -> usize { self.0 }
+    pub(crate) fn as_usize(&self) -> usize {
+        self.0
+    }
 }

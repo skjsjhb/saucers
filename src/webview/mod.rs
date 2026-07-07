@@ -3,13 +3,12 @@ mod options;
 mod script;
 
 use std::borrow::Cow;
-use std::cell::Cell;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::ptr::NonNull;
+use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::sync::Weak;
-use std::sync::mpsc::Sender;
 use std::thread::ThreadId;
 
 pub use events::*;
@@ -17,6 +16,7 @@ pub use options::*;
 use saucer_sys::*;
 pub use script::*;
 
+use crate::cleanup::CleanUpHolder;
 use crate::icon::Icon;
 use crate::macros::load_range;
 use crate::macros::use_string;
@@ -33,10 +33,10 @@ use crate::window::Window;
 /// An unprotected raw webview handle.
 struct RawWebview {
     inner: NonNull<saucer_webview>,
-    drop_sender: Sender<Box<dyn FnOnce() + Send>>,
+    drop_sender: Sender<CleanUpHolder>,
     host_tid: ThreadId,
-    event_listener_data: Cell<*mut EventListenerData>,
-    scheme_handler_data: Cell<*mut SchemeHandlerData>,
+    event_listener_data: *mut EventListenerData,
+    scheme_handler_data: *mut SchemeHandlerData,
     schemes: Vec<Cow<'static, str>>,
     window: Window, // Keep the window alive
 }
@@ -44,67 +44,46 @@ struct RawWebview {
 unsafe impl Send for RawWebview {}
 unsafe impl Sync for RawWebview {}
 
-struct RawWebviewCleanUp {
-    inner: NonNull<saucer_webview>,
-    schemes: Vec<Cow<'static, str>>,
-    event_listener_data: *mut EventListenerData,
-    scheme_handler_data: *mut SchemeHandlerData,
-}
-
-unsafe impl Send for RawWebviewCleanUp {}
-
 impl Drop for RawWebview {
     fn drop(&mut self) {
-        let cl = RawWebviewCleanUp {
-            inner: self.inner,
+        let cleanup = CleanUpHolder::Webview {
+            ptr: self.inner,
             schemes: self.schemes.drain(..).collect(),
-            event_listener_data: self.event_listener_data.take(), // Ensure exclusive access
-            scheme_handler_data: self.scheme_handler_data.take(),
-        };
-
-        let col = move || unsafe {
-            let _ = &cl;
-            let ptr = cl.inner.as_ptr();
-
-            for s in cl.schemes {
-                use_string!(s: s.as_ref(); saucer_webview_remove_scheme(ptr, s));
-            }
-
-            // Technically, a webview may be freed after its corresponding window due to the
-            // deferred posting, which may introduce broken states. However, such broken states will
-            // only happen when the handle is being dropped, which is not visible to the safe world.
-            saucer_webview_free(ptr); // Events will be automatically cleaned
-
-            drop(Box::from_raw(cl.scheme_handler_data));
-            drop(Box::from_raw(cl.event_listener_data));
+            event_listener_data: self.event_listener_data,
+            scheme_handler_data: self.scheme_handler_data,
         };
 
         if self.is_thread_safe() {
-            col();
+            unsafe { cleanup.discard() }; // SAFETY: On the event thread
         } else {
-            self.drop_sender.send(Box::new(col)).expect("failed to post webview destruction");
+            self.drop_sender
+                .send(cleanup)
+                .expect("failed to post webview destruction");
         }
     }
 }
 
 impl RawWebview {
-    fn is_thread_safe(&self) -> bool { std::thread::current().id() == self.host_tid }
+    fn is_thread_safe(&self) -> bool {
+        std::thread::current().id() == self.host_tid
+    }
 }
 
 /// A webview handle.
 ///
-/// Webviews are shared and the underlying browser is only closed after the last handle is dropped.
-/// When created inside the app start callback, it should be moved into the
-/// [`crate::app::FinishListener`] so that it don't get closed immediately. Also, a webview captures
-/// the window it lives in, making it no longer necessary to keep the window handle separately.
+/// Webviews are shared and the underlying browser is only closed after the last
+/// handle is dropped. When created inside the app start callback, it should be
+/// moved into the [`crate::app::FinishListener`] so that it don't get closed
+/// immediately. Also, a webview captures the window it lives in, making it no
+/// longer necessary to keep the window handle separately.
 #[derive(Clone)]
 pub struct Webview(Arc<RawWebview>);
 
 impl Webview {
     /// Constructs a new webview from the given [`WebviewOptions`], [`Window`],
-    /// [`WebviewEventListener`], [`WebviewSchemeHandler`], and a list of schemes that this webview
-    /// intend to handle. The scheme must be registered via [`crate::scheme::register_scheme`]
-    /// before being used.
+    /// [`WebviewEventListener`], [`WebviewSchemeHandler`], and a list of
+    /// schemes that this webview intend to handle. The scheme must be
+    /// registered via [`crate::scheme::register_scheme`] before being used.
     pub fn new(
         opt: WebviewOptions,
         window: Window,
@@ -117,29 +96,33 @@ impl Webview {
 
         let ds = window.drop_sender();
         let w = window.clone();
+        let schemes = scheme_handler.schemes();
         let mut ex = -1;
         let opt = RawWebviewOptions::new(opt, window);
         let ptr = unsafe { saucer_webview_new(opt.as_ptr(), &raw mut ex) };
         let wv = NonNull::new(ptr).ok_or(crate::error::Error::Saucer(ex))?;
 
-        let wv = Self(Arc::new(RawWebview {
-            inner: wv,
-            drop_sender: ds,
-            host_tid: std::thread::current().id(),
-            event_listener_data: Cell::default(),
-            scheme_handler_data: Cell::default(),
-            schemes: scheme_handler.schemes(),
-            window: w,
+        let wv = Self(Arc::new_cyclic(|weak| {
+            let webview = WebviewRef(weak.clone());
+
+            RawWebview {
+                inner: wv,
+                drop_sender: ds,
+                host_tid: std::thread::current().id(),
+                event_listener_data: Box::into_raw(Box::new(EventListenerData::new(
+                    event_listener,
+                    webview.clone(),
+                ))),
+                scheme_handler_data: Box::into_raw(Box::new(SchemeHandlerData::new(
+                    scheme_handler,
+                    webview,
+                ))),
+                schemes,
+                window: w,
+            }
         }));
-
-        let data = EventListenerData::new(event_listener, wv.downgrade());
-        let data = Box::into_raw(Box::new(data));
-
-        let scheme_data = SchemeHandlerData::new(scheme_handler, wv.downgrade());
-        let scheme_data = Box::into_raw(Box::new(scheme_data));
-
-        wv.0.event_listener_data.replace(data);
-        wv.0.scheme_handler_data.replace(scheme_data);
+        let data = wv.0.event_listener_data;
+        let scheme_data = wv.0.scheme_handler_data;
 
         for s in &wv.0.schemes {
             use_string!(s: s.as_ref(); unsafe {
@@ -192,13 +175,19 @@ impl Webview {
     }
 
     /// Checks whether devtools is open.
-    pub fn has_dev_tools(&self) -> bool { unsafe { saucer_webview_dev_tools(self.as_ptr()) } }
+    pub fn has_dev_tools(&self) -> bool {
+        unsafe { saucer_webview_dev_tools(self.as_ptr()) }
+    }
 
     /// Checks whether context menu is enabled.
-    pub fn has_context_menu(&self) -> bool { unsafe { saucer_webview_context_menu(self.as_ptr()) } }
+    pub fn has_context_menu(&self) -> bool {
+        unsafe { saucer_webview_context_menu(self.as_ptr()) }
+    }
 
     /// Checks whether dark mode is enforced.
-    pub fn is_force_dark(&self) -> bool { unsafe { saucer_webview_force_dark(self.as_ptr()) } }
+    pub fn is_force_dark(&self) -> bool {
+        unsafe { saucer_webview_force_dark(self.as_ptr()) }
+    }
 
     /// Gets the background color.
     pub fn background(&self) -> (u8, u8, u8, u8) {
@@ -208,7 +197,13 @@ impl Webview {
         let mut a = 0;
 
         unsafe {
-            saucer_webview_background(self.as_ptr(), &raw mut r, &raw mut g, &raw mut b, &raw mut a)
+            saucer_webview_background(
+                self.as_ptr(),
+                &raw mut r,
+                &raw mut g,
+                &raw mut b,
+                &raw mut a,
+            )
         }
 
         (r, g, b, a)
@@ -222,7 +217,13 @@ impl Webview {
         let mut h = 0;
 
         unsafe {
-            saucer_webview_bounds(self.as_ptr(), &raw mut x, &raw mut y, &raw mut w, &raw mut h)
+            saucer_webview_bounds(
+                self.as_ptr(),
+                &raw mut x,
+                &raw mut y,
+                &raw mut w,
+                &raw mut h,
+            )
         }
 
         (x, y, w, h)
@@ -264,7 +265,9 @@ impl Webview {
     }
 
     /// Reset webview bounds.
-    pub fn reset_bounds(&self) { unsafe { saucer_webview_reset_bounds(self.as_ptr()) } }
+    pub fn reset_bounds(&self) {
+        unsafe { saucer_webview_reset_bounds(self.as_ptr()) }
+    }
 
     /// Sets the webview bounds in the window.
     pub fn set_bounds(&self, x: i32, y: i32, w: i32, h: i32) {
@@ -272,13 +275,19 @@ impl Webview {
     }
 
     /// Navigates back.
-    pub fn back(&self) { unsafe { saucer_webview_back(self.as_ptr()) } }
+    pub fn back(&self) {
+        unsafe { saucer_webview_back(self.as_ptr()) }
+    }
 
     /// Navigates forward.
-    pub fn forward(&self) { unsafe { saucer_webview_forward(self.as_ptr()) } }
+    pub fn forward(&self) {
+        unsafe { saucer_webview_forward(self.as_ptr()) }
+    }
 
     /// Reloads the webview.
-    pub fn reload(&self) { unsafe { saucer_webview_reload(self.as_ptr()) } }
+    pub fn reload(&self) {
+        unsafe { saucer_webview_reload(self.as_ptr()) }
+    }
 
     /// Navigates to the embedded content specified by the path.
     pub fn serve(&self, path: impl Into<Vec<u8>>) {
@@ -298,7 +307,9 @@ impl Webview {
     }
 
     /// Removes all embedded items.
-    pub fn unembed_all(&self) { unsafe { saucer_webview_unembed_all(self.as_ptr()) } }
+    pub fn unembed_all(&self) {
+        unsafe { saucer_webview_unembed_all(self.as_ptr()) }
+    }
 
     /// Removes the embedded item at the given path.
     pub fn unembed(&self, path: impl Into<Vec<u8>>) {
@@ -326,7 +337,9 @@ impl Webview {
     }
 
     /// Removes all injected scripts.
-    pub fn uninject_all(&self) { unsafe { saucer_webview_uninject_all(self.as_ptr()) } }
+    pub fn uninject_all(&self) {
+        unsafe { saucer_webview_uninject_all(self.as_ptr()) }
+    }
 
     /// Removes injected script by ID.
     pub fn uninject(&self, id: ScriptId) {
@@ -334,45 +347,59 @@ impl Webview {
     }
 
     /// Gets the parent window.
-    pub fn window(&self) -> Window { self.0.window.clone() }
+    pub fn window(&self) -> Window {
+        self.0.window.clone()
+    }
 
     /// Gets a weak [`WebviewRef`].
-    pub fn downgrade(&self) -> WebviewRef { WebviewRef(Arc::downgrade(&self.0)) }
+    pub fn downgrade(&self) -> WebviewRef {
+        WebviewRef(Arc::downgrade(&self.0))
+    }
 
-    pub(crate) fn as_ptr(&self) -> *mut saucer_webview { self.0.inner.as_ptr() }
+    pub(crate) fn as_ptr(&self) -> *mut saucer_webview {
+        self.0.inner.as_ptr()
+    }
 }
 
 /// A weak webview handle.
 ///
-/// Like [`crate::app::AppRef`], this handle does not prevent deallocation and can be used in
-/// various listeners.
+/// Like [`crate::app::AppRef`], this handle does not prevent deallocation and
+/// can be used in various listeners.
 #[derive(Clone)]
 pub struct WebviewRef(Weak<RawWebview>);
 
 impl WebviewRef {
     /// Tries to upgrade to a strong handle.
-    pub fn upgrade(&self) -> Option<Webview> { Some(Webview(self.0.upgrade()?)) }
+    pub fn upgrade(&self) -> Option<Webview> {
+        Some(Webview(self.0.upgrade()?))
+    }
 }
 
-struct SchemeHandlerData {
+pub(crate) struct SchemeHandlerData {
     handler: Box<dyn WebviewSchemeHandler + 'static>,
     webview: WebviewRef,
 }
 
 impl SchemeHandlerData {
     fn new(handler: impl WebviewSchemeHandler + 'static, webview: WebviewRef) -> Self {
-        Self { handler: Box::new(handler), webview }
+        Self {
+            handler: Box::new(handler),
+            webview,
+        }
     }
 }
 
-struct EventListenerData {
+pub(crate) struct EventListenerData {
     listener: Box<dyn WebviewEventListener + 'static>,
     webview: WebviewRef,
 }
 
 impl EventListenerData {
     fn new(listener: impl WebviewEventListener + 'static, webview: WebviewRef) -> Self {
-        Self { listener: Box::new(listener), webview }
+        Self {
+            listener: Box::new(listener),
+            webview,
+        }
     }
 }
 

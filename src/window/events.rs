@@ -4,8 +4,9 @@ use crate::window::WindowDecoration;
 
 /// A trait containing window events.
 ///
-/// Because the listener is stored inside the [`Window`] handle, capturing any handle directly will
-/// form circular references and prevent them from dropping. It's advised to use the passed argument
+/// Because the listener is stored inside the [`Window`] handle, capturing any
+/// handle directly will form circular references and prevent them from
+/// dropping. It's advised to use the passed argument
 /// or [`crate::window::WindowRef`] instead.
 #[allow(unused)]
 pub trait WindowEventListener {
@@ -28,5 +29,7 @@ pub trait WindowEventListener {
     fn on_focus(&self, window: Window, focused: bool) {}
 
     /// Fired when the window is about to close.
-    fn on_close(&self, window: Window) -> Policy { Policy::Allow }
+    fn on_close(&self, window: Window) -> Policy {
+        Policy::Allow
+    }
 }

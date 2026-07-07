@@ -7,8 +7,8 @@ use crate::window::Window;
 
 /// Options for configuring webview creation.
 ///
-/// Saucer provides sensible defaults for webview setup. Leaving a field [`None`] picks these preset
-/// values.
+/// Saucer provides sensible defaults for webview setup. Leaving a field
+/// [`None`] picks these preset values.
 #[derive(Default)]
 pub struct WebviewOptions {
     pub allow_attributes: Option<bool>,
@@ -24,7 +24,9 @@ pub(crate) struct RawWebviewOptions {
 }
 
 impl Drop for RawWebviewOptions {
-    fn drop(&mut self) { unsafe { saucer_webview_options_free(self.as_ptr()) } }
+    fn drop(&mut self) {
+        unsafe { saucer_webview_options_free(self.as_ptr()) }
+    }
 }
 
 impl RawWebviewOptions {
@@ -54,12 +56,15 @@ impl RawWebviewOptions {
             }
 
             for f in opt.browser_flags {
-                use_string!(f; saucer_webview_options_append_browser_flag(ptr, f)); // Value copied
+                use_string!(f; saucer_webview_options_append_browser_flag(ptr, f));
+                // Value copied
             }
         }
 
         Self { inner }
     }
 
-    pub(crate) fn as_ptr(&self) -> *mut saucer_webview_options { self.inner.as_ptr() }
+    pub(crate) fn as_ptr(&self) -> *mut saucer_webview_options {
+        self.inner.as_ptr()
+    }
 }

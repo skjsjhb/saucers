@@ -7,10 +7,10 @@ use saucers::policy::Policy;
 use saucers::window::Window;
 use saucers::window::WindowEventListener;
 
-/// This example shows how to listen for the close event and prevent the default behavior
-/// conditionally.
+/// This example shows how to listen for the close event and prevent the default
+/// behavior conditionally.
 fn main() {
-    let app = AppManager::new(AppOptions::new_with_id("reopen"));
+    let app = AppManager::new(AppOptions::new_with_id("event"));
 
     app.run(
         |app, fin| {
@@ -18,7 +18,9 @@ fn main() {
                 allow_close: Cell<bool>,
             }
 
-            let window_ev = WindowEv { allow_close: Cell::new(false) };
+            let window_ev = WindowEv {
+                allow_close: Cell::new(false),
+            };
 
             impl WindowEventListener for WindowEv {
                 fn on_close(&self, _window: Window) -> Policy {

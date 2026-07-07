@@ -51,7 +51,9 @@ impl Clone for PermissionRequest {
 
 impl PermissionRequest {
     pub(crate) unsafe fn from_ptr(ptr: *mut saucer_permission_request) -> Self {
-        Self { inner: NonNull::new(ptr).expect("invalid permission request ptr") }
+        Self {
+            inner: NonNull::new(ptr).expect("invalid permission request ptr"),
+        }
     }
 
     /// Sets whether to accept the permission request.

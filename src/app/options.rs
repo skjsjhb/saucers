@@ -21,7 +21,11 @@ pub struct AppOptions {
 impl AppOptions {
     /// Constructs options with its parts.
     pub fn new(id: String, args: Vec<String>, quit_on_last_window_closed: bool) -> Self {
-        Self { id, args, quit_on_last_window_closed }
+        Self {
+            id,
+            args,
+            quit_on_last_window_closed,
+        }
     }
 
     /// Constructs options with ID, leaving other fields as default.
@@ -31,7 +35,8 @@ impl AppOptions {
     pub fn inherit_args(&mut self) { self.args = std::env::args().collect(); }
 }
 
-/// Helper struct for managing raw pointers to app options and args that must be kept valid.
+/// Helper struct for managing raw pointers to app options and args that must be
+/// kept valid.
 pub(crate) struct RawAppOptions {
     inner: NonNull<saucer_application_options>,
     args: Vec<*mut c_char>,
@@ -64,7 +69,11 @@ impl RawAppOptions {
         let mut args: Vec<*mut c_char> = opt
             .args
             .into_iter()
-            .map(|s| CString::new(s).expect("FFI strings should not contain zeros").into_raw())
+            .map(|s| {
+                CString::new(s)
+                    .expect("FFI strings should not contain zeros")
+                    .into_raw()
+            })
             .collect();
 
         let argv = args.as_mut_ptr();

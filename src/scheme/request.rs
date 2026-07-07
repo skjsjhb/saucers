@@ -20,16 +20,19 @@ impl Drop for Request {
 }
 
 impl Request {
-    /// SAFETY: The pointer must be valid, and the returned handle must be dropped before leaving
-    /// the request callback.
+    /// SAFETY: The pointer must be valid, and the returned handle must be
+    /// dropped before leaving the request callback.
     pub(crate) unsafe fn from_ptr(ptr: *mut saucer_scheme_request) -> Self {
-        Self { ptr: NonNull::new(ptr).expect("invalid scheme request ptr") }
+        Self {
+            ptr: NonNull::new(ptr).expect("invalid scheme request ptr"),
+        }
     }
 
     /// Gets the request headers.
     ///
-    /// A copy of the headers is created each time this method is called. Consider reusing the
-    /// headers instead of calling this method repetitively.
+    /// A copy of the headers is created each time this method is called.
+    /// Consider reusing the headers instead of calling this method
+    /// repetitively.
     pub fn headers(&self) -> Vec<(String, String)> {
         let mut buf = load_range!(ptr[size] = 0u8; {
             unsafe { saucer_scheme_request_headers(self.ptr.as_ptr(), ptr as *mut c_char, size) }
@@ -62,8 +65,8 @@ impl Request {
 
     /// Gets the request content.
     ///
-    /// A copy of the body is created each time this method is called. Consider reusing the body
-    /// instead of calling this method repetitively.
+    /// A copy of the body is created each time this method is called. Consider
+    /// reusing the body instead of calling this method repetitively.
     pub fn content(&self) -> Stash<'static> {
         let ptr = unsafe { saucer_scheme_request_content(self.ptr.as_ptr()) };
         Stash::from_ptr(ptr)

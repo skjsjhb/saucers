@@ -10,9 +10,10 @@ use saucers::webview::WebviewEventListener;
 use saucers::webview::WebviewOptions;
 use saucers::window::Window;
 
-/// This example demonstrates how to send message from webview to host and vice versa.
-/// Note that this example uses [`Webview::execute`] to message back, which can be inefficient for
-/// large payloads. Consider using a scheme handler as needed.
+/// This example demonstrates how to send message from webview to host and vice
+/// versa. Note that this example uses [`Webview::execute`] to message back,
+/// which can be inefficient for large payloads. Consider using a scheme handler
+/// as needed.
 fn main() {
     register_scheme("foo");
 
@@ -39,10 +40,11 @@ fn main() {
 
             let webview = Webview::new(WebviewOptions::default(), window, WebviewEv, NoOp).unwrap();
 
-            // Browser scripts are not injected until a navigation (URL or HTML). Scripts enable
-            // `window.saucer.internal.message` so that you have a unified API on all platforms.
-            // Platform-specific APIs can still be used without scripts, like `window.chrome`,
-            // `window.webkit` or `QWebChannel` (with the prelude script).
+            // Browser scripts are not injected until a navigation (URL or HTML). Scripts
+            // enable `window.saucer.internal.message` so that you have a
+            // unified API on all platforms. Platform-specific APIs can still be
+            // used without scripts, like `window.chrome`, `window.webkit` or
+            // `QWebChannel` (with the prelude script).
             webview.set_html("");
 
             webview.execute(

@@ -1,8 +1,8 @@
 //! This is the Rust bindings for [saucer](https://github.com/saucer/saucer). The C++ webview
 //! library.
 //!
-//! This crate wraps around the C API of saucer and intends to provide safe items for using directly
-//! or as building blocks of frameworks.
+//! This crate wraps around the C API of saucer and intends to provide safe
+//! items for using directly or as building blocks of frameworks.
 //!
 //! Examples can be found in the [`examples`](https://github.com/skjsjhb/saucers/tree/main/examples)
 //! directory.
@@ -17,6 +17,7 @@ use crate::webview::WebviewSchemeHandler;
 use crate::window::WindowEventListener;
 
 pub mod app;
+mod cleanup;
 pub mod desktop;
 pub mod error;
 pub mod icon;
@@ -35,7 +36,8 @@ mod util;
 pub mod webview;
 pub mod window;
 
-/// Gets the library version. Returns an empty string if the version can't be determined.
+/// Gets the library version. Returns an empty string if the version can't be
+/// determined.
 pub fn version() -> &'static str {
     unsafe { CStr::from_ptr(saucer_version()).to_str().unwrap_or("") }
 }

@@ -5,9 +5,10 @@ use saucers::webview::Webview;
 use saucers::webview::WebviewOptions;
 use saucers::window::Window;
 
-/// This example demonstrates how to create a window with transparent/semi-transparent background.
-/// Transparent windows work best with decorations disabled, but to keep it simple this example
-/// preserves control widgets.
+/// This example demonstrates how to create a window with
+/// transparent/semi-transparent background. Transparent windows work best with
+/// decorations disabled, but to keep it simple this example preserves control
+/// widgets.
 fn main() {
     let app = AppManager::new(AppOptions::new_with_id("transparent"));
 
@@ -22,8 +23,8 @@ fn main() {
             let webview =
                 Webview::new(WebviewOptions::default(), window.clone(), NoOp, NoOp).unwrap();
 
-            // Both the window and the webview must be transparent, or everything will just be
-            // solid.
+            // Both the window and the webview must be transparent, or everything will just
+            // be solid.
             window.set_background((0, 0, 0, 0));
             webview.set_background(0, 0, 0, 0);
 

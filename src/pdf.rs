@@ -10,8 +10,8 @@ use crate::webview::Webview;
 
 /// The PDF printing module.
 ///
-/// This struct borrows a [`Webview`] as it uses browser functionalities to print documents, making
-/// its lifetime tied to the handle.
+/// This struct borrows a [`Webview`] as it uses browser functionalities to
+/// print documents, making its lifetime tied to the handle.
 pub struct Pdf<'a> {
     ptr: NonNull<saucer_pdf>,
     _webview: &'a Webview,
@@ -28,13 +28,18 @@ impl<'a> Pdf<'a> {
     /// Creates and mounts the PDF module to the given [`Webview`].
     pub fn new(w: &'a Webview) -> Self {
         let ptr = unsafe { saucer_pdf_new(w.as_ptr()) };
-        Self { ptr: NonNull::new(ptr).expect("PDF module should be created"), _webview: w }
+        Self {
+            ptr: NonNull::new(ptr).expect("PDF module should be created"),
+            _webview: w,
+        }
     }
 
-    /// Prints the content of the current page into a PDF file using the given settings.
+    /// Prints the content of the current page into a PDF file using the given
+    /// settings.
     ///
-    /// This method blocks until the printing process finishes. It internally polls app events so
-    /// the UI won't freeze, but the processor usage may grow high when printing.
+    /// This method blocks until the printing process finishes. It internally
+    /// polls app events so the UI won't freeze, but the processor usage may
+    /// grow high when printing.
     pub fn save(&self, settings: impl AsRef<PdfSettings>) {
         unsafe { saucer_pdf_save(self.ptr.as_ptr(), settings.as_ref().as_ptr()) }
     }
@@ -71,7 +76,9 @@ impl PdfSettings {
     /// Creates a settings object that saves to the specified path.
     pub fn new(fp: impl Into<Vec<u8>>) -> Self {
         let ptr = use_string!(fp; unsafe { saucer_pdf_settings_new(fp) });
-        Self { ptr: NonNull::new(ptr).expect("PDF settings should be created") }
+        Self {
+            ptr: NonNull::new(ptr).expect("PDF settings should be created"),
+        }
     }
 
     /// Sets the output orientation.

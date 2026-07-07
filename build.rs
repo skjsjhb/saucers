@@ -7,7 +7,8 @@ fn main() {
     let is_debug = profile == "debug" || profile == "test";
 
     if os == Os::Windows && is_debug {
-        // Someone added a directive to link to the release library, even in debug mode...
+        // Someone added a directive to link to the release library, even in debug
+        // mode...
         // I'm looking at you CC 👀
         println!("cargo::rustc-link-arg=/NODEFAULTLIB:msvcrt");
     }

@@ -2,13 +2,12 @@ mod decoration;
 mod edge;
 mod events;
 
-use std::cell::Cell;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::ptr::NonNull;
+use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::sync::Weak;
-use std::sync::mpsc::Sender;
 use std::thread::ThreadId;
 
 pub use decoration::*;
@@ -16,6 +15,7 @@ pub use events::*;
 use saucer_sys::*;
 
 use crate::app::App;
+use crate::cleanup::CleanUpHolder;
 use crate::icon::Icon;
 use crate::macros::load_range;
 use crate::macros::use_string;
@@ -26,63 +26,49 @@ use crate::window::edge::WindowEdge;
 /// An unprotected owned window handle.
 struct RawWindow {
     inner: NonNull<saucer_window>,
-    drop_sender: Sender<Box<dyn FnOnce() + Send>>,
+    drop_sender: Sender<CleanUpHolder>,
     host_tid: ThreadId,
-    event_listener_data: Cell<*mut EventListenerData>, // For mutability inside Arc
-}
-
-unsafe impl Send for RawWindow {}
-// SAFETY: Cell is !Sync, but a shared reference to it can never be obtained other than CTOR and
-// Drop, in which we both have mutable access.
-unsafe impl Sync for RawWindow {}
-
-struct RawWindowCleanUp {
-    inner: NonNull<saucer_window>,
     event_listener_data: *mut EventListenerData,
 }
 
-unsafe impl Send for RawWindowCleanUp {}
+unsafe impl Send for RawWindow {}
+unsafe impl Sync for RawWindow {}
 
 impl Drop for RawWindow {
     fn drop(&mut self) {
-        let cl = RawWindowCleanUp {
-            inner: self.inner,
-            event_listener_data: self.event_listener_data.take(),
-        };
-
-        let col = move || unsafe {
-            let _ = &cl;
-
-            let ptr = cl.inner.as_ptr();
-
-            saucer_window_free(ptr); // Events will be automatically cleaned
-
-            // We can't be inside an event handler here as they're executed with a backed-up handle
-            drop(Box::from_raw(cl.event_listener_data));
+        let cleanup = CleanUpHolder::Window {
+            ptr: self.inner,
+            event_listener_data: self.event_listener_data,
         };
 
         if self.is_thread_safe() {
-            col();
+            unsafe { cleanup.discard() }; // SAFETY: On the event thread
         } else {
-            self.drop_sender.send(Box::new(col)).expect("failed to post window destruction");
+            self.drop_sender
+                .send(cleanup)
+                .expect("failed to post window destruction");
         }
     }
 }
 
 impl RawWindow {
-    fn is_thread_safe(&self) -> bool { std::thread::current().id() == self.host_tid }
+    fn is_thread_safe(&self) -> bool {
+        std::thread::current().id() == self.host_tid
+    }
 }
 
 /// A window handle.
 ///
-/// Window handles are shared and the underlying window is only closed after the last handle is
-/// dropped. When created inside the app start callback, it should be consumed in a webview, or
-/// moved into the [`crate::app::FinishListener`] so that it don't get closed immediately.
+/// Window handles are shared and the underlying window is only closed after the
+/// last handle is dropped. When created inside the app start callback, it
+/// should be consumed in a webview, or moved into the
+/// [`crate::app::FinishListener`] so that it don't get closed immediately.
 #[derive(Clone)]
 pub struct Window(Arc<RawWindow>);
 
 impl Window {
-    /// Creates a new window using the given [`App`] and [`WindowEventListener`].
+    /// Creates a new window using the given [`App`] and
+    /// [`WindowEventListener`].
     ///
     /// This method must be called on the event thread, or it will panic.
     ///
@@ -102,17 +88,16 @@ impl Window {
 
         let wnd = NonNull::new(ptr).ok_or(crate::error::Error::Saucer(ex))?;
 
-        let wnd = Self(Arc::new(RawWindow {
+        let wnd = Self(Arc::new_cyclic(|weak| RawWindow {
             inner: wnd,
             drop_sender: app.drop_sender(),
             host_tid: std::thread::current().id(),
-            event_listener_data: Cell::default(),
+            event_listener_data: Box::into_raw(Box::new(EventListenerData::new(
+                event_listener,
+                WindowRef(weak.clone()),
+            ))),
         }));
-
-        let data = EventListenerData::new(event_listener, wnd.downgrade());
-        let data = Box::into_raw(Box::new(data));
-
-        wnd.0.event_listener_data.replace(data);
+        let data = wnd.0.event_listener_data;
 
         macro_rules! bind_event {
             ($ev:expr, $cb:expr) => {
@@ -134,31 +119,49 @@ impl Window {
     }
 
     /// Checks we're on the event thread.
-    pub fn is_thread_safe(&self) -> bool { self.0.is_thread_safe() }
+    pub fn is_thread_safe(&self) -> bool {
+        self.0.is_thread_safe()
+    }
 
     /// Checks whether the window is visible.
-    pub fn is_visible(&self) -> bool { unsafe { saucer_window_visible(self.as_ptr()) } }
+    pub fn is_visible(&self) -> bool {
+        unsafe { saucer_window_visible(self.as_ptr()) }
+    }
 
     /// Checks whether the window is focused.
-    pub fn is_focused(&self) -> bool { unsafe { saucer_window_focused(self.as_ptr()) } }
+    pub fn is_focused(&self) -> bool {
+        unsafe { saucer_window_focused(self.as_ptr()) }
+    }
 
     /// Checks whether the window is maximized.
-    pub fn is_maximized(&self) -> bool { unsafe { saucer_window_maximized(self.as_ptr()) } }
+    pub fn is_maximized(&self) -> bool {
+        unsafe { saucer_window_maximized(self.as_ptr()) }
+    }
 
     /// Checks whether the window is minimized.
-    pub fn is_minimized(&self) -> bool { unsafe { saucer_window_minimized(self.as_ptr()) } }
+    pub fn is_minimized(&self) -> bool {
+        unsafe { saucer_window_minimized(self.as_ptr()) }
+    }
 
     /// Checks whether the window is resizable.
-    pub fn is_resizable(&self) -> bool { unsafe { saucer_window_resizable(self.as_ptr()) } }
+    pub fn is_resizable(&self) -> bool {
+        unsafe { saucer_window_resizable(self.as_ptr()) }
+    }
 
     /// Checks whether the window is fullscreen.
-    pub fn is_fullscreen(&self) -> bool { unsafe { saucer_window_fullscreen(self.as_ptr()) } }
+    pub fn is_fullscreen(&self) -> bool {
+        unsafe { saucer_window_fullscreen(self.as_ptr()) }
+    }
 
     /// Checks whether the window is always on top.
-    pub fn is_always_on_top(&self) -> bool { unsafe { saucer_window_always_on_top(self.as_ptr()) } }
+    pub fn is_always_on_top(&self) -> bool {
+        unsafe { saucer_window_always_on_top(self.as_ptr()) }
+    }
 
     /// Checks whether the window is click-through.
-    pub fn is_click_through(&self) -> bool { unsafe { saucer_window_click_through(self.as_ptr()) } }
+    pub fn is_click_through(&self) -> bool {
+        unsafe { saucer_window_click_through(self.as_ptr()) }
+    }
 
     /// Gets the window title.
     pub fn title(&self) -> String {
@@ -176,7 +179,13 @@ impl Window {
         let mut b = 0;
         let mut a = 0;
         unsafe {
-            saucer_window_background(self.as_ptr(), &raw mut r, &raw mut g, &raw mut b, &raw mut a)
+            saucer_window_background(
+                self.as_ptr(),
+                &raw mut r,
+                &raw mut g,
+                &raw mut b,
+                &raw mut a,
+            )
         };
         (r, g, b, a)
     }
@@ -219,25 +228,36 @@ impl Window {
         (x, y)
     }
 
-    /// Gets the screen this window is on. Returns [`None`] if the screen can't be determined.
+    /// Gets the screen this window is on. Returns [`None`] if the screen can't
+    /// be determined.
     pub fn screen(&self) -> Option<Screen> {
         unsafe { Screen::from_raw(saucer_window_screen(self.as_ptr())) }
     }
 
     /// Hides the window.
-    pub fn hide(&self) { unsafe { saucer_window_hide(self.as_ptr()) } }
+    pub fn hide(&self) {
+        unsafe { saucer_window_hide(self.as_ptr()) }
+    }
 
     /// Shows the window.
-    pub fn show(&self) { unsafe { saucer_window_show(self.as_ptr()) } }
+    pub fn show(&self) {
+        unsafe { saucer_window_show(self.as_ptr()) }
+    }
 
     /// Closes the window.
-    pub fn close(&self) { unsafe { saucer_window_close(self.as_ptr()) } }
+    pub fn close(&self) {
+        unsafe { saucer_window_close(self.as_ptr()) }
+    }
 
     /// Focuses the window.
-    pub fn focus(&self) { unsafe { saucer_window_focus(self.as_ptr()) } }
+    pub fn focus(&self) {
+        unsafe { saucer_window_focus(self.as_ptr()) }
+    }
 
     /// Starts a drag operation.
-    pub fn start_drag(&self) { unsafe { saucer_window_start_drag(self.as_ptr()) } }
+    pub fn start_drag(&self) {
+        unsafe { saucer_window_start_drag(self.as_ptr()) }
+    }
 
     /// Starts a resize operation on the given edge.
     pub fn start_resize(&self, edge: WindowEdge) {
@@ -318,35 +338,44 @@ impl Window {
     }
 
     /// Gets a weak [`WindowRef`].
-    pub fn downgrade(&self) -> WindowRef { WindowRef(Arc::downgrade(&self.0)) }
+    pub fn downgrade(&self) -> WindowRef {
+        WindowRef(Arc::downgrade(&self.0))
+    }
 
-    pub(crate) fn as_ptr(&self) -> *mut saucer_window { self.0.inner.as_ptr() }
+    pub(crate) fn as_ptr(&self) -> *mut saucer_window {
+        self.0.inner.as_ptr()
+    }
 
-    pub(crate) fn drop_sender(&self) -> Sender<Box<dyn FnOnce() + Send>> {
+    pub(crate) fn drop_sender(&self) -> Sender<CleanUpHolder> {
         self.0.drop_sender.clone()
     }
 }
 
 /// A weak window handle.
 ///
-/// Like [`crate::app::AppRef`], this handle does not prevent deallocation and can be used in
-/// various listeners.
+/// Like [`crate::app::AppRef`], this handle does not prevent deallocation and
+/// can be used in various listeners.
 #[derive(Clone)]
 pub struct WindowRef(Weak<RawWindow>);
 
 impl WindowRef {
     /// Tries to upgrade to a strong handle.
-    pub fn upgrade(&self) -> Option<Window> { Some(Window(self.0.upgrade()?)) }
+    pub fn upgrade(&self) -> Option<Window> {
+        Some(Window(self.0.upgrade()?))
+    }
 }
 
-struct EventListenerData {
+pub(crate) struct EventListenerData {
     listener: Box<dyn WindowEventListener + 'static>,
     window: WindowRef,
 }
 
 impl EventListenerData {
     fn new(listener: impl WindowEventListener + 'static, window: WindowRef) -> Self {
-        Self { listener: Box::new(listener), window }
+        Self {
+            listener: Box::new(listener),
+            window,
+        }
     }
 }
 

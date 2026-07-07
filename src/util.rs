@@ -1,14 +1,17 @@
 use std::ffi::CStr;
 use std::ffi::c_char;
 
-/// Copies the given C string into an owned [`String`]. Performs lossy UTF-8 conversion if needed.
+/// Copies the given C string into an owned [`String`]. Performs lossy UTF-8
+/// conversion if needed.
 ///
 /// SAFETY: See [`CStr::from_ptr`].
 pub(crate) unsafe fn make_owned_string(ptr: *const c_char) -> String {
     if ptr.is_null() {
         "".to_owned()
     } else {
-        unsafe { CStr::from_ptr(ptr) }.to_string_lossy().into_owned()
+        unsafe { CStr::from_ptr(ptr) }
+            .to_string_lossy()
+            .into_owned()
     }
 }
 
