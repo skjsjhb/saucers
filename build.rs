@@ -11,5 +11,6 @@ fn main() {
         // mode...
         // I'm looking at you CC 👀
         println!("cargo::rustc-link-arg=/NODEFAULTLIB:msvcrt");
+        println!("cargo::rustc-link-arg=/DEFAULTLIB:msvcrtd");
     }
 }
