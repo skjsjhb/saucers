@@ -6,6 +6,8 @@ mod events;
 mod options;
 
 use std::ffi::c_void;
+use std::panic::AssertUnwindSafe;
+use std::panic::UnwindSafe;
 use std::ptr::NonNull;
 use std::ptr::null_mut;
 use std::sync::Arc;
@@ -147,7 +149,7 @@ impl AppManager {
     /// method will try to join all handles before returning.
     pub fn run(
         mut self,
-        start: impl FnOnce(App, &mut FinishListener) + 'static,
+        start: impl FnOnce(App, &mut FinishListener) + UnwindSafe + 'static,
         event_listener: impl AppEventListener,
     ) -> crate::error::Result<()> {
         let mut ex = -1;
@@ -222,7 +224,7 @@ impl App {
 
     /// Posts a callback to be invoked on the event thread, schedules it on the
     /// next event loop.
-    pub fn post(&self, callback: impl FnOnce(App) + Send + 'static) {
+    pub fn post(&self, callback: impl FnOnce(App) + Send + UnwindSafe + 'static) {
         let data = PostCallbackData::new(callback, self.downgrade()).into_raw();
         unsafe { saucer_application_post(self.0.as_ptr(), Some(post_callback_tp), data) };
     }
@@ -238,7 +240,7 @@ impl App {
     /// needed.
     pub fn post_timeout(
         &self,
-        callback: impl FnOnce(App) + Send + 'static,
+        callback: impl FnOnce(App) + Send + UnwindSafe + 'static,
         timeout: Duration,
     ) -> JoinHandle<bool> {
         let data = PostTimeoutCallbackData::new(callback, self.downgrade());
@@ -291,17 +293,17 @@ impl AppRef {
 /// A struct that holds a listener which can be invoked when the app quits.
 #[derive(Default)]
 pub struct FinishListener {
-    inner: Option<Box<dyn FnOnce(App) + 'static>>,
+    inner: Option<Box<dyn FnOnce(App) + UnwindSafe + 'static>>,
 }
 
 impl FinishListener {
     /// Sets the finish callback. Replaces it if already set.
-    pub fn set(&mut self, listener: impl FnOnce(App) + 'static) {
+    pub fn set(&mut self, listener: impl FnOnce(App) + UnwindSafe + 'static) {
         self.inner = Some(Box::new(listener));
     }
 }
 
-type BoxedRunCallback = Box<dyn FnOnce(App, &mut FinishListener) + 'static>;
+type BoxedRunCallback = Box<dyn FnOnce(App, &mut FinishListener) + UnwindSafe + 'static>;
 
 struct RunCallbackData {
     callback: Option<BoxedRunCallback>,
@@ -310,7 +312,7 @@ struct RunCallbackData {
 }
 
 impl RunCallbackData {
-    fn new(cb: impl FnOnce(App, &mut FinishListener) + 'static, app: App) -> Self {
+    fn new(cb: impl FnOnce(App, &mut FinishListener) + UnwindSafe + 'static, app: App) -> Self {
         Self {
             callback: Some(Box::new(cb)),
             finish_listener: FinishListener::default(),
@@ -324,13 +326,14 @@ impl RunCallbackData {
 extern "C" fn run_callback_tp(_: *mut saucer_application, data: *mut c_void) {
     // SAFETY: The method is invoked only once.
     let mut data = unsafe { Box::from_raw(data as *mut RunCallbackData) };
-    ffi_callback((), || {
-        let start = data
-            .callback
-            .take()
-            .expect("start callback should be present");
-        start(data.app.clone(), &mut data.finish_listener);
-    });
+    if let Some(start) = data.callback.take() {
+        let app = data.app.clone();
+        // Unwinding would not break FinishListener
+        let mut fin = AssertUnwindSafe(&mut data.finish_listener);
+        ffi_callback((), move || {
+            start(app, *fin);
+        });
+    }
     let _ = Box::into_raw(data); // It will be used in the finish callback
 }
 
@@ -346,7 +349,7 @@ extern "C" fn finish_callback_tp(_: *mut saucer_application, data: *mut c_void) 
     });
 }
 
-type BoxedPostCallback = Box<dyn FnOnce(App) + Send + 'static>;
+type BoxedPostCallback = Box<dyn FnOnce(App) + Send + UnwindSafe + 'static>;
 
 struct PostCallbackData {
     callback: BoxedPostCallback,
@@ -354,7 +357,7 @@ struct PostCallbackData {
 }
 
 impl PostCallbackData {
-    fn new(cb: impl FnOnce(App) + Send + 'static, app: AppRef) -> Self {
+    fn new(cb: impl FnOnce(App) + Send + UnwindSafe + 'static, app: AppRef) -> Self {
         Self {
             callback: Box::new(cb),
             app,
@@ -382,7 +385,7 @@ struct PostTimeoutCallbackData {
 }
 
 impl PostTimeoutCallbackData {
-    fn new(cb: impl FnOnce(App) + Send + 'static, app: AppRef) -> Self {
+    fn new(cb: impl FnOnce(App) + Send + UnwindSafe + 'static, app: AppRef) -> Self {
         Self {
             callback: Arc::new(Mutex::new(Some(Box::new(cb)))),
             app,
@@ -425,10 +428,10 @@ impl<'a> EventListenerData<'a> {
 }
 
 extern "C" fn ev_on_quit_tp(_: *mut saucer_application, data: *mut c_void) -> saucer_policy {
+    // SAFETY: The borrow inside the data is guaranteed to be valid as long as the
+    // app runs.
+    let data = unsafe { &*(data as *const EventListenerData) };
     ffi_callback(Policy::Allow.into(), || {
-        // SAFETY: The borrow inside the data is guaranteed to be valid as long as the
-        // app runs.
-        let data = unsafe { &*(data as *const EventListenerData) };
         if let Some(app) = data.app.upgrade() {
             data.listener.on_quit(app).into()
         } else {

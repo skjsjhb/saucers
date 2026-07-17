@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::panic::AssertUnwindSafe;
 use std::rc::Rc;
 use std::rc::Weak;
 
@@ -23,18 +24,26 @@ fn main() {
 
     app.run(
         |app, fin| {
-            let webviews = Rc::new(RefCell::new(Vec::new()));
+            let webviews = AssertUnwindSafe(Rc::new(RefCell::new(Vec::new())));
 
-            #[derive(Clone)]
             struct WebviewEv {
                 // Event handlers are stored inside the webview, thus Weak must be used to prevent
                 // circular references.
-                webviews: Weak<RefCell<Vec<Webview>>>,
+                webviews: AssertUnwindSafe<Weak<RefCell<Vec<Webview>>>>,
                 app: App,
             }
 
+            impl Clone for WebviewEv {
+                fn clone(&self) -> Self {
+                    Self {
+                        webviews: AssertUnwindSafe(self.webviews.0.clone()),
+                        app: self.app.clone(),
+                    }
+                }
+            }
+
             let webview_ev = WebviewEv {
-                webviews: Rc::downgrade(&webviews),
+                webviews: AssertUnwindSafe(Rc::downgrade(&webviews)),
                 app: app.clone(),
             };
 

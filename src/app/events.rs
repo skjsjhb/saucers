@@ -1,8 +1,10 @@
+use std::panic::RefUnwindSafe;
+
 use crate::app::App;
 use crate::policy::Policy;
 
 /// A trait that handles app events.
-pub trait AppEventListener {
+pub trait AppEventListener: RefUnwindSafe {
     /// Invoked when the app is about to quit.
     ///
     /// Note that this event may be fired multiple times event if it's

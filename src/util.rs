@@ -1,6 +1,6 @@
 use std::ffi::CStr;
 use std::ffi::c_char;
-use std::panic::AssertUnwindSafe;
+use std::panic::UnwindSafe;
 use std::panic::catch_unwind;
 
 /// Copies the given C string into an owned [`String`]. Performs lossy UTF-8
@@ -44,8 +44,8 @@ pub(crate) fn inflate_strings(mut src: &[u8]) -> Vec<String> {
 /// The panic payload is intentionally leaked because dropping an arbitrary
 /// payload can itself panic. The panic hook still runs before the unwind is
 /// caught.
-pub(crate) fn ffi_callback<R>(fallback: R, callback: impl FnOnce() -> R) -> R {
-    match catch_unwind(AssertUnwindSafe(callback)) {
+pub(crate) fn ffi_callback<R>(fallback: R, callback: impl FnOnce() -> R + UnwindSafe) -> R {
+    match catch_unwind(callback) {
         Ok(result) => result,
         Err(payload) => {
             std::mem::forget(payload);

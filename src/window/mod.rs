@@ -326,8 +326,8 @@ extern "C" fn ev_on_decorated_tp(
     dec: saucer_window_decoration,
     data: *mut c_void,
 ) {
+    let data = unsafe { &*(data as *const EventListenerData) };
     ffi_callback((), || {
-        let data = unsafe { &*(data as *const EventListenerData) };
         if let Some(wnd) = data.window.upgrade() {
             data.listener.on_decorated(wnd.clone(), dec.into()); // Clone to avoid dropping in the handler
         }
@@ -335,8 +335,8 @@ extern "C" fn ev_on_decorated_tp(
 }
 
 extern "C" fn ev_on_maximize_tp(_: *mut saucer_window, maximized: bool, data: *mut c_void) {
+    let data = unsafe { &*(data as *const EventListenerData) };
     ffi_callback((), || {
-        let data = unsafe { &*(data as *const EventListenerData) };
         if let Some(wnd) = data.window.upgrade() {
             data.listener.on_maximize(wnd.clone(), maximized);
         }
@@ -344,8 +344,8 @@ extern "C" fn ev_on_maximize_tp(_: *mut saucer_window, maximized: bool, data: *m
 }
 
 extern "C" fn ev_on_minimize_tp(_: *mut saucer_window, minimized: bool, data: *mut c_void) {
+    let data = unsafe { &*(data as *const EventListenerData) };
     ffi_callback((), || {
-        let data = unsafe { &*(data as *const EventListenerData) };
         if let Some(wnd) = data.window.upgrade() {
             data.listener.on_minimize(wnd.clone(), minimized);
         }
@@ -353,8 +353,8 @@ extern "C" fn ev_on_minimize_tp(_: *mut saucer_window, minimized: bool, data: *m
 }
 
 extern "C" fn ev_on_closed_tp(_: *mut saucer_window, data: *mut c_void) {
+    let data = unsafe { &*(data as *const EventListenerData) };
     ffi_callback((), || {
-        let data = unsafe { &*(data as *const EventListenerData) };
         if let Some(wnd) = data.window.upgrade() {
             data.listener.on_closed(wnd.clone());
         }
@@ -362,8 +362,8 @@ extern "C" fn ev_on_closed_tp(_: *mut saucer_window, data: *mut c_void) {
 }
 
 extern "C" fn ev_on_resize_tp(_: *mut saucer_window, width: u32, height: u32, data: *mut c_void) {
+    let data = unsafe { &*(data as *const EventListenerData) };
     ffi_callback((), || {
-        let data = unsafe { &*(data as *const EventListenerData) };
         if let Some(wnd) = data.window.upgrade() {
             data.listener.on_resize(wnd.clone(), width, height);
         }
@@ -371,8 +371,8 @@ extern "C" fn ev_on_resize_tp(_: *mut saucer_window, width: u32, height: u32, da
 }
 
 extern "C" fn ev_on_focus_tp(_: *mut saucer_window, focused: bool, data: *mut c_void) {
+    let data = unsafe { &*(data as *const EventListenerData) };
     ffi_callback((), || {
-        let data = unsafe { &*(data as *const EventListenerData) };
         if let Some(wnd) = data.window.upgrade() {
             data.listener.on_focus(wnd.clone(), focused);
         }
@@ -380,8 +380,8 @@ extern "C" fn ev_on_focus_tp(_: *mut saucer_window, focused: bool, data: *mut c_
 }
 
 extern "C" fn ev_on_close_tp(_: *mut saucer_window, data: *mut c_void) -> saucer_policy {
+    let data = unsafe { &*(data as *const EventListenerData) };
     ffi_callback(Policy::Allow.into(), || {
-        let data = unsafe { &*(data as *const EventListenerData) };
         if let Some(wnd) = data.window.upgrade() {
             data.listener.on_close(wnd.clone()).into()
         } else {

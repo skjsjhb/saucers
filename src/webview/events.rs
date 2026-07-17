@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::panic::RefUnwindSafe;
 
 use crate::icon::Icon;
 use crate::navigation::Navigation;
@@ -19,7 +20,7 @@ use crate::webview::Webview;
 /// dropping. It's advised to use the passed argument
 /// or [`crate::webview::WebviewRef`] instead.
 #[allow(unused)] // Template
-pub trait WebviewEventListener {
+pub trait WebviewEventListener: RefUnwindSafe {
     /// Fired when the webview requests a permission.
     fn on_permission(&self, webview: Webview, req: PermissionRequest) -> HandleStatus {
         HandleStatus::Unhandled
@@ -57,7 +58,7 @@ pub trait WebviewEventListener {
 
 /// A trait for handling schemes.
 #[allow(unused)] // Template
-pub trait WebviewSchemeHandler {
+pub trait WebviewSchemeHandler: RefUnwindSafe {
     /// Returns all schemes this handler intends to process.
     fn schemes(&self) -> Vec<Cow<'static, str>> { Vec::default() }
 

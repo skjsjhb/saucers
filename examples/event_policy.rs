@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::panic::AssertUnwindSafe;
 
 use saucers::NoOp;
 use saucers::app::AppManager;
@@ -15,11 +16,11 @@ fn main() {
     app.run(
         |app, fin| {
             struct WindowEv {
-                allow_close: Cell<bool>,
+                allow_close: AssertUnwindSafe<Cell<bool>>,
             }
 
             let window_ev = WindowEv {
-                allow_close: Cell::new(false),
+                allow_close: AssertUnwindSafe(Cell::new(false)),
             };
 
             impl WindowEventListener for WindowEv {

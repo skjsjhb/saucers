@@ -1,3 +1,5 @@
+use std::panic::RefUnwindSafe;
+
 use crate::policy::Policy;
 use crate::window::Window;
 use crate::window::WindowDecoration;
@@ -9,7 +11,7 @@ use crate::window::WindowDecoration;
 /// dropping. It's advised to use the passed argument
 /// or [`crate::window::WindowRef`] instead.
 #[allow(unused)]
-pub trait WindowEventListener {
+pub trait WindowEventListener: RefUnwindSafe {
     /// Fired when the window decoration status changes.
     fn on_decorated(&self, window: Window, decoration: WindowDecoration) {}
 

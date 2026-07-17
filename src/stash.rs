@@ -1,4 +1,6 @@
 use std::marker::PhantomData;
+#[cfg(false)]
+use std::panic::UnwindSafe;
 use std::ptr::NonNull;
 
 use saucer_sys::*;
@@ -86,7 +88,9 @@ impl Stash<'_> {
     /// passing a lazy stash into C APIs are not yet fully verified.
     #[doc(hidden)]
     #[cfg(false)]
-    pub fn new_lazy(populator: impl FnOnce() -> Stash<'static> + Send + 'static) -> Self {
+    pub fn new_lazy(
+        populator: impl FnOnce() -> Stash<'static> + Send + UnwindSafe + 'static,
+    ) -> Self {
         // A lazy stash internally caches the value and will call the populator at most
         // once. However, it's uncertain when it will be called, thus Send +
         // 'static. The returned stash may also be used for unknown lifetime,
@@ -124,7 +128,7 @@ impl AsRef<[u8]> for Stash<'_> {
 
 #[cfg(false)]
 struct LazyCallbackData {
-    callback: Box<dyn FnOnce() -> Stash<'static> + Send + 'static>,
+    callback: Box<dyn FnOnce() -> Stash<'static> + Send + UnwindSafe + 'static>,
 }
 
 #[cfg(false)]

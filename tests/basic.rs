@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::panic::AssertUnwindSafe;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -43,7 +44,6 @@ fn app_lifecycle() {
     register_scheme("test");
 
     let app = AppManager::new(AppOptions::new_with_id("test"));
-    let counter = Arc::new(());
 
     #[derive(Default)]
     struct Trace {
@@ -69,53 +69,50 @@ fn app_lifecycle() {
         }
     }
 
-    #[derive(Clone)]
-    struct SharedTrace {
-        trace: Rc<RefCell<Trace>>, // If `borrow_mut` panics, the event listener is unsound!
-        _counter: Arc<()>,
+    struct SharedTrace(AssertUnwindSafe<Rc<RefCell<Trace>>>); // If `borrow_mut` panics, the event listener is unsound!
+
+    impl Clone for SharedTrace {
+        fn clone(&self) -> Self { SharedTrace(AssertUnwindSafe(self.0.clone())) }
     }
 
-    let trace = Rc::new(RefCell::new(Trace::default()));
+    let trace = SharedTrace(AssertUnwindSafe(Rc::new(RefCell::new(Trace::default()))));
 
     impl AppEventListener for SharedTrace {
         fn on_quit(&self, _app: App) -> Policy {
-            self.trace.borrow_mut().quit_fired = true;
+            self.0.borrow_mut().quit_fired = true;
             Policy::Allow
         }
     }
 
     impl WebviewEventListener for SharedTrace {
         fn on_dom_ready(&self, webview: Webview) {
-            self.trace.borrow_mut().dom_ready_fired = true;
+            self.0.borrow_mut().dom_ready_fired = true;
             webview.execute("window.saucer.internal.message(window._injected.toString());");
         }
 
         fn on_navigate(&self, _webview: Webview, _nav: &Navigation) -> Policy {
-            self.trace.borrow_mut().navigate_fired = true;
+            self.0.borrow_mut().navigate_fired = true;
             Policy::Allow
         }
 
         fn on_message(&self, webview: Webview, msg: Cow<str>) -> HandleStatus {
             if msg == "true" {
-                self.trace.borrow_mut().inject_script_executed = true;
+                self.0.borrow_mut().inject_script_executed = true;
                 webview.window().close();
             } else {
-                self.trace.borrow_mut().message_received = true;
+                self.0.borrow_mut().message_received = true;
             }
 
             HandleStatus::Handled
         }
 
         fn on_load(&self, _webview: Webview, _state: LoadState) {
-            self.trace.borrow_mut().load_fired = true;
+            self.0.borrow_mut().load_fired = true;
         }
     }
 
-    let trace_app = SharedTrace {
-        trace: trace.clone(),
-        _counter: counter.clone(),
-    };
-    let trace_webview = trace_app.clone();
+    let trace_app = trace.clone();
+    let trace_webview = trace.clone();
 
     const PAGE_HTML: &str = r#"
         <script>
@@ -143,6 +140,8 @@ fn app_lifecycle() {
         }
     }
 
+    let counter = Arc::new(());
+
     app.run(
         {
             let counter = counter.clone();
@@ -167,5 +166,5 @@ fn app_lifecycle() {
     .unwrap();
 
     assert_eq!(Arc::strong_count(&counter), 1, "closures should be dropped");
-    trace.borrow().verify();
+    trace.0.borrow().verify();
 }
