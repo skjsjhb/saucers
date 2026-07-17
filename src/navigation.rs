@@ -3,6 +3,7 @@ use std::ptr::NonNull;
 
 use saucer_sys::*;
 
+use crate::macros::ffi_forward;
 use crate::url::Url;
 
 /// A navigation descriptor.
@@ -19,6 +20,15 @@ pub struct Navigation<'a> {
 // !Send + !Sync as it may call thread-unsafe methods
 
 impl Navigation<'_> {
+    ffi_forward! {
+        /// Checks whether the navigation requests a new window to be created.
+        pub fn is_new_window(&Self) -> bool => saucer_navigation_new_window;
+        /// Checks whether the navigation is initiated by a redirection.
+        pub fn is_redirection(&Self) -> bool => saucer_navigation_redirection;
+        /// Checks whether the navigation is initiated by user actions.
+        pub fn is_user_initiated(&Self) -> bool => saucer_navigation_user_initiated;
+    }
+
     /// SAFETY: The provided pointer must outlive the returned struct.
     pub(crate) unsafe fn from_ptr(ptr: *mut saucer_navigation) -> Self {
         Self {
@@ -27,24 +37,11 @@ impl Navigation<'_> {
         }
     }
 
-    /// Checks whether the navigation requests a new window to be created.
-    pub fn is_new_window(&self) -> bool {
-        unsafe { saucer_navigation_new_window(self.ptr.as_ptr()) }
-    }
-
-    /// Checks whether the navigation is initiated by a redirection.
-    pub fn is_redirection(&self) -> bool {
-        unsafe { saucer_navigation_redirection(self.ptr.as_ptr()) }
-    }
-
-    /// Checks whether the navigation is initiated by user actions.
-    pub fn is_user_initiated(&self) -> bool {
-        unsafe { saucer_navigation_user_initiated(self.ptr.as_ptr()) }
-    }
-
     /// Gets the URL that's about to navigate to.
     pub fn url(&self) -> Url {
         let ptr = unsafe { saucer_navigation_url(self.ptr.as_ptr()) };
         unsafe { Url::from_ptr(ptr, -1) }.expect("navigation URL should be present")
     }
+
+    fn as_ptr(&self) -> *mut saucer_navigation { self.ptr.as_ptr() }
 }

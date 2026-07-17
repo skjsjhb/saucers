@@ -3,6 +3,8 @@ use std::ptr::NonNull;
 
 use saucer_sys::*;
 
+use crate::macros::ffi_forward;
+
 /// An immutable interface to interact with binary data.
 ///
 /// A stash can own its data or borrow data defined elsewhere (as long as it
@@ -38,6 +40,11 @@ impl Clone for Stash<'_> {
 }
 
 impl Stash<'_> {
+    ffi_forward! {
+        /// Gets the size of the stash.
+        pub fn size(&Self) -> usize => saucer_stash_size;
+    }
+
     pub(crate) fn from_ptr(ptr: *mut saucer_stash) -> Self {
         Self {
             ptr: NonNull::new(ptr).expect("invalid stash ptr"),
@@ -92,9 +99,6 @@ impl Stash<'_> {
 
         Self::from_ptr(ptr)
     }
-
-    /// Gets the size of the stash.
-    pub fn size(&self) -> usize { unsafe { saucer_stash_size(self.ptr.as_ptr()) } }
 
     /// Returns the inner data.
     pub fn data(&self) -> &[u8] {

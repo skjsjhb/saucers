@@ -17,6 +17,7 @@ use saucer_sys::*;
 use crate::app::App;
 use crate::cleanup::CleanUpHolder;
 use crate::icon::Icon;
+use crate::macros::ffi_forward;
 use crate::macros::load_range;
 use crate::macros::use_string;
 use crate::policy::Policy;
@@ -66,6 +67,53 @@ impl RawWindow {
 pub struct Window(Arc<RawWindow>);
 
 impl Window {
+    ffi_forward! {
+        /// Checks whether the window is visible.
+        pub fn is_visible(&Self) -> bool => saucer_window_visible;
+        /// Checks whether the window is focused.
+        pub fn is_focused(&Self) -> bool => saucer_window_focused;
+        /// Checks whether the window is maximized.
+        pub fn is_maximized(&Self) -> bool => saucer_window_maximized;
+        /// Checks whether the window is minimized.
+        pub fn is_minimized(&Self) -> bool => saucer_window_minimized;
+        /// Checks whether the window is resizable.
+        pub fn is_resizable(&Self) -> bool => saucer_window_resizable;
+        /// Checks whether the window is fullscreen.
+        pub fn is_fullscreen(&Self) -> bool => saucer_window_fullscreen;
+        /// Checks whether the window is always on top.
+        pub fn is_always_on_top(&Self) -> bool => saucer_window_always_on_top;
+        /// Checks whether the window is click-through.
+        pub fn is_click_through(&Self) -> bool => saucer_window_click_through;
+    }
+
+    ffi_forward! {
+        /// Hides the window.
+        pub fn hide(&Self) => saucer_window_hide;
+        /// Shows the window.
+        pub fn show(&Self) => saucer_window_show;
+        /// Closes the window.
+        pub fn close(&Self) => saucer_window_close;
+        /// Focuses the window.
+        pub fn focus(&Self) => saucer_window_focus;
+        /// Starts a drag operation.
+        pub fn start_drag(&Self) => saucer_window_start_drag;
+    }
+
+    ffi_forward! {
+        /// Toggles window maximization.
+        pub fn set_maximized(&Self, maximized: bool) => saucer_window_set_maximized;
+        /// Toggles window minimization.
+        pub fn set_minimized(&Self, minimized: bool) => saucer_window_set_minimized;
+        /// Toggles window resizability.
+        pub fn set_resizable(&Self, resizable: bool) => saucer_window_set_resizable;
+        /// Toggles window fullscreen.
+        pub fn set_fullscreen(&Self, fullscreen: bool) => saucer_window_set_fullscreen;
+        /// Sets whether the window is always on top.
+        pub fn set_always_on_top(&Self, always_on_top: bool) => saucer_window_set_always_on_top;
+        /// Sets whether the window is click-through.
+        pub fn set_click_through(&Self, click_through: bool) => saucer_window_set_click_through;
+    }
+
     /// Creates a new window using the given [`App`] and
     /// [`WindowEventListener`].
     ///
@@ -119,30 +167,6 @@ impl Window {
 
     /// Checks we're on the event thread.
     pub fn is_thread_safe(&self) -> bool { self.0.is_thread_safe() }
-
-    /// Checks whether the window is visible.
-    pub fn is_visible(&self) -> bool { unsafe { saucer_window_visible(self.as_ptr()) } }
-
-    /// Checks whether the window is focused.
-    pub fn is_focused(&self) -> bool { unsafe { saucer_window_focused(self.as_ptr()) } }
-
-    /// Checks whether the window is maximized.
-    pub fn is_maximized(&self) -> bool { unsafe { saucer_window_maximized(self.as_ptr()) } }
-
-    /// Checks whether the window is minimized.
-    pub fn is_minimized(&self) -> bool { unsafe { saucer_window_minimized(self.as_ptr()) } }
-
-    /// Checks whether the window is resizable.
-    pub fn is_resizable(&self) -> bool { unsafe { saucer_window_resizable(self.as_ptr()) } }
-
-    /// Checks whether the window is fullscreen.
-    pub fn is_fullscreen(&self) -> bool { unsafe { saucer_window_fullscreen(self.as_ptr()) } }
-
-    /// Checks whether the window is always on top.
-    pub fn is_always_on_top(&self) -> bool { unsafe { saucer_window_always_on_top(self.as_ptr()) } }
-
-    /// Checks whether the window is click-through.
-    pub fn is_click_through(&self) -> bool { unsafe { saucer_window_click_through(self.as_ptr()) } }
 
     /// Gets the window title.
     pub fn title(&self) -> String {
@@ -215,54 +239,9 @@ impl Window {
         unsafe { Screen::from_raw(saucer_window_screen(self.as_ptr())) }
     }
 
-    /// Hides the window.
-    pub fn hide(&self) { unsafe { saucer_window_hide(self.as_ptr()) } }
-
-    /// Shows the window.
-    pub fn show(&self) { unsafe { saucer_window_show(self.as_ptr()) } }
-
-    /// Closes the window.
-    pub fn close(&self) { unsafe { saucer_window_close(self.as_ptr()) } }
-
-    /// Focuses the window.
-    pub fn focus(&self) { unsafe { saucer_window_focus(self.as_ptr()) } }
-
-    /// Starts a drag operation.
-    pub fn start_drag(&self) { unsafe { saucer_window_start_drag(self.as_ptr()) } }
-
     /// Starts a resize operation on the given edge.
     pub fn start_resize(&self, edge: WindowEdge) {
         unsafe { saucer_window_start_resize(self.as_ptr(), edge.into()) }
-    }
-
-    /// Toggles window maximization.
-    pub fn set_maximized(&self, maximized: bool) {
-        unsafe { saucer_window_set_maximized(self.as_ptr(), maximized) }
-    }
-
-    /// Toggles window minimization.
-    pub fn set_minimized(&self, minimized: bool) {
-        unsafe { saucer_window_set_minimized(self.as_ptr(), minimized) }
-    }
-
-    /// Toggles window resizability.
-    pub fn set_resizable(&self, resizable: bool) {
-        unsafe { saucer_window_set_resizable(self.as_ptr(), resizable) }
-    }
-
-    /// Toggles window fullscreen.
-    pub fn set_fullscreen(&self, fullscreen: bool) {
-        unsafe { saucer_window_set_fullscreen(self.as_ptr(), fullscreen) }
-    }
-
-    /// Sets whether the window is always on top.
-    pub fn set_always_on_top(&self, always_on_top: bool) {
-        unsafe { saucer_window_set_always_on_top(self.as_ptr(), always_on_top) }
-    }
-
-    /// Sets whether the window is click-through.
-    pub fn set_click_through(&self, click_through: bool) {
-        unsafe { saucer_window_set_click_through(self.as_ptr(), click_through) }
     }
 
     /// Sets the window icon.

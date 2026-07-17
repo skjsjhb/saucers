@@ -3,6 +3,7 @@ use std::ptr::NonNull;
 
 use saucer_sys::*;
 
+use crate::macros::ffi_forward;
 use crate::macros::use_string;
 use crate::stash::Stash;
 
@@ -21,6 +22,11 @@ impl<'a> Drop for Response<'a> {
 }
 
 impl<'a> Response<'a> {
+    ffi_forward! {
+        /// Sets the response status code.
+        pub fn set_status(&mut Self, status: i32) => saucer_scheme_response_set_status;
+    }
+
     /// Creates a new response from the given [`Stash`] and MIME type. Also
     /// appends a `Content-Type` header with the specified MIME type.
     ///
@@ -36,11 +42,6 @@ impl<'a> Response<'a> {
             ptr: NonNull::new(ptr).expect("invalid response data"),
             _marker: PhantomData,
         }
-    }
-
-    /// Sets the response status code.
-    pub fn set_status(&mut self, status: i32) {
-        unsafe { saucer_scheme_response_set_status(self.as_ptr(), status) }
     }
 
     /// Adds a header to the response.

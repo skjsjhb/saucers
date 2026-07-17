@@ -5,6 +5,7 @@ use std::ptr::NonNull;
 
 use saucer_sys::*;
 
+use crate::macros::ffi_forward;
 use crate::macros::use_string;
 use crate::webview::Webview;
 
@@ -73,6 +74,11 @@ impl Drop for PdfSettings {
 }
 
 impl PdfSettings {
+    ffi_forward! {
+        /// Sets the output size.
+        pub fn set_size(&mut Self, width: f64, height: f64) => saucer_pdf_settings_set_size;
+    }
+
     /// Creates a settings object that saves to the specified path.
     pub fn new(fp: impl Into<Vec<u8>>) -> Self {
         let ptr = use_string!(fp; unsafe { saucer_pdf_settings_new(fp) });
@@ -84,11 +90,6 @@ impl PdfSettings {
     /// Sets the output orientation.
     pub fn set_orientation(&mut self, orientation: Layout) {
         unsafe { saucer_pdf_settings_set_orientation(self.ptr.as_ptr(), orientation.into()) };
-    }
-
-    /// Sets the output size.
-    pub fn set_size(&mut self, width: f64, height: f64) {
-        unsafe { saucer_pdf_settings_set_size(self.ptr.as_ptr(), width, height) };
     }
 
     fn as_ptr(&self) -> *mut saucer_pdf_settings { self.ptr.as_ptr() }

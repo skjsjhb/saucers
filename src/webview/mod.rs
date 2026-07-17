@@ -18,6 +18,7 @@ pub use script::*;
 
 use crate::cleanup::CleanUpHolder;
 use crate::icon::Icon;
+use crate::macros::ffi_forward;
 use crate::macros::load_range;
 use crate::macros::use_string;
 use crate::navigation::Navigation;
@@ -79,6 +80,46 @@ impl RawWebview {
 pub struct Webview(Arc<RawWebview>);
 
 impl Webview {
+    ffi_forward! {
+        /// Checks whether devtools is open.
+        pub fn has_dev_tools(&Self) -> bool => saucer_webview_dev_tools;
+        /// Checks whether context menu is enabled.
+        pub fn has_context_menu(&Self) -> bool => saucer_webview_context_menu;
+        /// Checks whether dark mode is enforced.
+        pub fn is_force_dark(&Self) -> bool => saucer_webview_force_dark;
+    }
+
+    ffi_forward! {
+        /// Toggles devtools.
+        pub fn set_dev_tools(&Self, enabled: bool) => saucer_webview_set_dev_tools;
+        /// Sets whether to enable context menu.
+        pub fn set_context_menu(&Self, enabled: bool) => saucer_webview_set_context_menu;
+        /// Sets whether to enforce dark mode.
+        pub fn set_force_dark(&Self, enabled: bool) => saucer_webview_set_force_dark;
+        /// Sets the background color.
+        pub fn set_background(&Self, r: u8, g: u8, b: u8, a: u8) => saucer_webview_set_background;
+        /// Reset webview bounds.
+        pub fn reset_bounds(&Self) => saucer_webview_reset_bounds;
+        /// Sets the webview bounds in the window.
+        pub fn set_bounds(&Self, x: i32, y: i32, w: i32, h: i32) => saucer_webview_set_bounds;
+        /// Navigates back.
+        pub fn back(&Self) => saucer_webview_back;
+        /// Navigates forward.
+        pub fn forward(&Self) => saucer_webview_forward;
+        /// Reloads the webview.
+        pub fn reload(&Self) => saucer_webview_reload;
+    }
+
+    ffi_forward! {
+        /// Removes all embedded items.
+        pub fn unembed_all(&Self) => saucer_webview_unembed_all;
+    }
+
+    ffi_forward! {
+        /// Removes all injected scripts.
+        pub fn uninject_all(&Self) => saucer_webview_uninject_all;
+    }
+
     /// Constructs a new webview from the given [`WebviewOptions`], [`Window`],
     /// [`WebviewEventListener`], [`WebviewSchemeHandler`], and a list of
     /// schemes that this webview intend to handle. The scheme must be
@@ -173,15 +214,6 @@ impl Webview {
         String::from_utf8_lossy(&buf).into_owned()
     }
 
-    /// Checks whether devtools is open.
-    pub fn has_dev_tools(&self) -> bool { unsafe { saucer_webview_dev_tools(self.as_ptr()) } }
-
-    /// Checks whether context menu is enabled.
-    pub fn has_context_menu(&self) -> bool { unsafe { saucer_webview_context_menu(self.as_ptr()) } }
-
-    /// Checks whether dark mode is enforced.
-    pub fn is_force_dark(&self) -> bool { unsafe { saucer_webview_force_dark(self.as_ptr()) } }
-
     /// Gets the background color.
     pub fn background(&self) -> (u8, u8, u8, u8) {
         let mut r = 0;
@@ -237,43 +269,6 @@ impl Webview {
         use_string!(html; unsafe { saucer_webview_set_html(self.as_ptr(), html) });
     }
 
-    /// Toggles devtools.
-    pub fn set_dev_tools(&self, enabled: bool) {
-        unsafe { saucer_webview_set_dev_tools(self.as_ptr(), enabled) }
-    }
-
-    /// Sets whether to enable context menu.
-    pub fn set_context_menu(&self, enabled: bool) {
-        unsafe { saucer_webview_set_context_menu(self.as_ptr(), enabled) }
-    }
-
-    /// Sets whether to enforce dark mode.
-    pub fn set_force_dark(&self, enabled: bool) {
-        unsafe { saucer_webview_set_force_dark(self.as_ptr(), enabled) }
-    }
-
-    /// Sets the background color.
-    pub fn set_background(&self, r: u8, g: u8, b: u8, a: u8) {
-        unsafe { saucer_webview_set_background(self.as_ptr(), r, g, b, a) }
-    }
-
-    /// Reset webview bounds.
-    pub fn reset_bounds(&self) { unsafe { saucer_webview_reset_bounds(self.as_ptr()) } }
-
-    /// Sets the webview bounds in the window.
-    pub fn set_bounds(&self, x: i32, y: i32, w: i32, h: i32) {
-        unsafe { saucer_webview_set_bounds(self.as_ptr(), x, y, w, h) }
-    }
-
-    /// Navigates back.
-    pub fn back(&self) { unsafe { saucer_webview_back(self.as_ptr()) } }
-
-    /// Navigates forward.
-    pub fn forward(&self) { unsafe { saucer_webview_forward(self.as_ptr()) } }
-
-    /// Reloads the webview.
-    pub fn reload(&self) { unsafe { saucer_webview_reload(self.as_ptr()) } }
-
     /// Navigates to the embedded content specified by the path.
     pub fn serve(&self, path: impl Into<Vec<u8>>) {
         use_string!(path; unsafe { saucer_webview_serve(self.as_ptr(), path) });
@@ -290,9 +285,6 @@ impl Webview {
             saucer_webview_embed(self.as_ptr(), path, content.as_ptr(), mime) // Value copied, yet the stash is !Sync
         });
     }
-
-    /// Removes all embedded items.
-    pub fn unembed_all(&self) { unsafe { saucer_webview_unembed_all(self.as_ptr()) } }
 
     /// Removes the embedded item at the given path.
     pub fn unembed(&self, path: impl Into<Vec<u8>>) {
@@ -318,9 +310,6 @@ impl Webview {
 
         ScriptId::from_usize(u)
     }
-
-    /// Removes all injected scripts.
-    pub fn uninject_all(&self) { unsafe { saucer_webview_uninject_all(self.as_ptr()) } }
 
     /// Removes injected script by ID.
     pub fn uninject(&self, id: ScriptId) {

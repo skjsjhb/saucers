@@ -5,6 +5,7 @@ use std::ptr::NonNull;
 
 use saucer_sys::*;
 
+use crate::macros::ffi_forward;
 use crate::macros::use_string;
 use crate::stash::Stash;
 
@@ -34,6 +35,11 @@ impl AsRef<Icon> for Icon {
 }
 
 impl Icon {
+    ffi_forward! {
+        /// Checks whether the icon is empty.
+        pub fn is_empty(&Self) -> bool => saucer_icon_empty;
+    }
+
     pub(crate) unsafe fn from_ptr(ptr: *mut saucer_icon) -> Self {
         let ptr = NonNull::new(ptr).expect("icon ptr should be non-null");
         Self { ptr }
@@ -65,9 +71,6 @@ impl Icon {
         let ptr = NonNull::new(ptr).ok_or(crate::error::Error::Saucer(ex))?;
         Ok(Self { ptr })
     }
-
-    /// Checks whether the icon is empty.
-    pub fn is_empty(&self) -> bool { unsafe { saucer_icon_empty(self.ptr.as_ptr()) } }
 
     /// Copies and returns the icon content.
     pub fn data(&self) -> Stash<'static> {

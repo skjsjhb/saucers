@@ -2,6 +2,7 @@ use std::ptr::NonNull;
 
 use saucer_sys::*;
 
+use crate::macros::ffi_forward;
 use crate::url::Url;
 
 /// Possible permission request types.
@@ -50,15 +51,15 @@ impl Clone for PermissionRequest {
 }
 
 impl PermissionRequest {
+    ffi_forward! {
+        /// Sets whether to accept the permission request.
+        pub fn accept(Self, accept: bool) => saucer_permission_request_accept;
+    }
+
     pub(crate) unsafe fn from_ptr(ptr: *mut saucer_permission_request) -> Self {
         Self {
             inner: NonNull::new(ptr).expect("invalid permission request ptr"),
         }
-    }
-
-    /// Sets whether to accept the permission request.
-    pub fn accept(self, accept: bool) {
-        unsafe { saucer_permission_request_accept(self.inner.as_ptr(), accept) };
     }
 
     /// Gets the requested permission type.
@@ -71,4 +72,6 @@ impl PermissionRequest {
         let ptr = unsafe { saucer_permission_request_url(self.inner.as_ptr()) };
         unsafe { Url::from_ptr(ptr, -1) }.expect("permission request URL should be present")
     }
+
+    fn as_ptr(&self) -> *mut saucer_permission_request { self.inner.as_ptr() }
 }

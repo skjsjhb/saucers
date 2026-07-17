@@ -22,6 +22,7 @@ pub use options::*;
 use saucer_sys::*;
 
 use crate::cleanup::CleanUpHolder;
+use crate::macros::ffi_forward;
 use crate::macros::load_range;
 use crate::policy::Policy;
 use crate::screen::Screen;
@@ -209,6 +210,11 @@ impl AppManager {
 pub struct App(Arc<RawApp>);
 
 impl App {
+    ffi_forward! {
+        /// Quits the app.
+        pub fn quit(Self) => saucer_application_quit;
+    }
+
     pub(crate) fn as_ptr(&self) -> *mut saucer_application { self.0.as_ptr() }
 
     /// Checks whether we're on the event thread.
@@ -250,9 +256,6 @@ impl App {
             }
         })
     }
-
-    /// Quits the app.
-    pub fn quit(self) { unsafe { saucer_application_quit(self.as_ptr()) }; }
 
     /// Gets a list of screens available.
     pub fn screens(&self) -> Vec<Screen> {

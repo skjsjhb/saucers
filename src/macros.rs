@@ -33,5 +33,24 @@ macro_rules! load_range {
     }};
 }
 
+/// Forwards Rust calls to C FFI functions with `self` pointer as receiver.
+macro_rules! ffi_forward {
+    () => {};
+
+    (
+        $(#[$meta:meta])*
+        $vis:vis fn $name:ident($self_ty:ty $(, $arg:ident: $ty:ty)*) $(-> $ret:ty)? => $ffi:path;
+        $($rest:tt)*
+    ) => {
+        $(#[$meta])*
+        $vis fn $name(self: $self_ty $(, $arg: $ty)*) $(-> $ret)? {
+            unsafe { $ffi(self.as_ptr(), $($arg),*) }
+        }
+
+        ffi_forward! { $($rest)* }
+    };
+}
+
+pub(crate) use ffi_forward;
 pub(crate) use load_range;
 pub(crate) use use_string;
