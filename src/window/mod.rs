@@ -5,9 +5,9 @@ mod events;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::sync::mpsc::Sender;
 use std::thread::ThreadId;
 
 pub use decoration::*;
@@ -21,6 +21,7 @@ use crate::macros::load_range;
 use crate::macros::use_string;
 use crate::policy::Policy;
 use crate::screen::Screen;
+use crate::util::ffi_callback;
 use crate::window::edge::WindowEdge;
 
 /// An unprotected owned window handle.
@@ -52,9 +53,7 @@ impl Drop for RawWindow {
 }
 
 impl RawWindow {
-    fn is_thread_safe(&self) -> bool {
-        std::thread::current().id() == self.host_tid
-    }
+    fn is_thread_safe(&self) -> bool { std::thread::current().id() == self.host_tid }
 }
 
 /// A window handle.
@@ -119,49 +118,31 @@ impl Window {
     }
 
     /// Checks we're on the event thread.
-    pub fn is_thread_safe(&self) -> bool {
-        self.0.is_thread_safe()
-    }
+    pub fn is_thread_safe(&self) -> bool { self.0.is_thread_safe() }
 
     /// Checks whether the window is visible.
-    pub fn is_visible(&self) -> bool {
-        unsafe { saucer_window_visible(self.as_ptr()) }
-    }
+    pub fn is_visible(&self) -> bool { unsafe { saucer_window_visible(self.as_ptr()) } }
 
     /// Checks whether the window is focused.
-    pub fn is_focused(&self) -> bool {
-        unsafe { saucer_window_focused(self.as_ptr()) }
-    }
+    pub fn is_focused(&self) -> bool { unsafe { saucer_window_focused(self.as_ptr()) } }
 
     /// Checks whether the window is maximized.
-    pub fn is_maximized(&self) -> bool {
-        unsafe { saucer_window_maximized(self.as_ptr()) }
-    }
+    pub fn is_maximized(&self) -> bool { unsafe { saucer_window_maximized(self.as_ptr()) } }
 
     /// Checks whether the window is minimized.
-    pub fn is_minimized(&self) -> bool {
-        unsafe { saucer_window_minimized(self.as_ptr()) }
-    }
+    pub fn is_minimized(&self) -> bool { unsafe { saucer_window_minimized(self.as_ptr()) } }
 
     /// Checks whether the window is resizable.
-    pub fn is_resizable(&self) -> bool {
-        unsafe { saucer_window_resizable(self.as_ptr()) }
-    }
+    pub fn is_resizable(&self) -> bool { unsafe { saucer_window_resizable(self.as_ptr()) } }
 
     /// Checks whether the window is fullscreen.
-    pub fn is_fullscreen(&self) -> bool {
-        unsafe { saucer_window_fullscreen(self.as_ptr()) }
-    }
+    pub fn is_fullscreen(&self) -> bool { unsafe { saucer_window_fullscreen(self.as_ptr()) } }
 
     /// Checks whether the window is always on top.
-    pub fn is_always_on_top(&self) -> bool {
-        unsafe { saucer_window_always_on_top(self.as_ptr()) }
-    }
+    pub fn is_always_on_top(&self) -> bool { unsafe { saucer_window_always_on_top(self.as_ptr()) } }
 
     /// Checks whether the window is click-through.
-    pub fn is_click_through(&self) -> bool {
-        unsafe { saucer_window_click_through(self.as_ptr()) }
-    }
+    pub fn is_click_through(&self) -> bool { unsafe { saucer_window_click_through(self.as_ptr()) } }
 
     /// Gets the window title.
     pub fn title(&self) -> String {
@@ -235,29 +216,19 @@ impl Window {
     }
 
     /// Hides the window.
-    pub fn hide(&self) {
-        unsafe { saucer_window_hide(self.as_ptr()) }
-    }
+    pub fn hide(&self) { unsafe { saucer_window_hide(self.as_ptr()) } }
 
     /// Shows the window.
-    pub fn show(&self) {
-        unsafe { saucer_window_show(self.as_ptr()) }
-    }
+    pub fn show(&self) { unsafe { saucer_window_show(self.as_ptr()) } }
 
     /// Closes the window.
-    pub fn close(&self) {
-        unsafe { saucer_window_close(self.as_ptr()) }
-    }
+    pub fn close(&self) { unsafe { saucer_window_close(self.as_ptr()) } }
 
     /// Focuses the window.
-    pub fn focus(&self) {
-        unsafe { saucer_window_focus(self.as_ptr()) }
-    }
+    pub fn focus(&self) { unsafe { saucer_window_focus(self.as_ptr()) } }
 
     /// Starts a drag operation.
-    pub fn start_drag(&self) {
-        unsafe { saucer_window_start_drag(self.as_ptr()) }
-    }
+    pub fn start_drag(&self) { unsafe { saucer_window_start_drag(self.as_ptr()) } }
 
     /// Starts a resize operation on the given edge.
     pub fn start_resize(&self, edge: WindowEdge) {
@@ -338,17 +309,11 @@ impl Window {
     }
 
     /// Gets a weak [`WindowRef`].
-    pub fn downgrade(&self) -> WindowRef {
-        WindowRef(Arc::downgrade(&self.0))
-    }
+    pub fn downgrade(&self) -> WindowRef { WindowRef(Arc::downgrade(&self.0)) }
 
-    pub(crate) fn as_ptr(&self) -> *mut saucer_window {
-        self.0.inner.as_ptr()
-    }
+    pub(crate) fn as_ptr(&self) -> *mut saucer_window { self.0.inner.as_ptr() }
 
-    pub(crate) fn drop_sender(&self) -> Sender<CleanUpHolder> {
-        self.0.drop_sender.clone()
-    }
+    pub(crate) fn drop_sender(&self) -> Sender<CleanUpHolder> { self.0.drop_sender.clone() }
 }
 
 /// A weak window handle.
@@ -360,9 +325,7 @@ pub struct WindowRef(Weak<RawWindow>);
 
 impl WindowRef {
     /// Tries to upgrade to a strong handle.
-    pub fn upgrade(&self) -> Option<Window> {
-        Some(Window(self.0.upgrade()?))
-    }
+    pub fn upgrade(&self) -> Option<Window> { Some(Window(self.0.upgrade()?)) }
 }
 
 pub(crate) struct EventListenerData {
@@ -384,52 +347,66 @@ extern "C" fn ev_on_decorated_tp(
     dec: saucer_window_decoration,
     data: *mut c_void,
 ) {
-    let data = unsafe { &*(data as *const EventListenerData) };
-    if let Some(wnd) = data.window.upgrade() {
-        data.listener.on_decorated(wnd.clone(), dec.into()); // Clone to avoid dropping in the handler
-    }
+    ffi_callback((), || {
+        let data = unsafe { &*(data as *const EventListenerData) };
+        if let Some(wnd) = data.window.upgrade() {
+            data.listener.on_decorated(wnd.clone(), dec.into()); // Clone to avoid dropping in the handler
+        }
+    });
 }
 
 extern "C" fn ev_on_maximize_tp(_: *mut saucer_window, maximized: bool, data: *mut c_void) {
-    let data = unsafe { &*(data as *const EventListenerData) };
-    if let Some(wnd) = data.window.upgrade() {
-        data.listener.on_maximize(wnd.clone(), maximized);
-    }
+    ffi_callback((), || {
+        let data = unsafe { &*(data as *const EventListenerData) };
+        if let Some(wnd) = data.window.upgrade() {
+            data.listener.on_maximize(wnd.clone(), maximized);
+        }
+    });
 }
 
 extern "C" fn ev_on_minimize_tp(_: *mut saucer_window, minimized: bool, data: *mut c_void) {
-    let data = unsafe { &*(data as *const EventListenerData) };
-    if let Some(wnd) = data.window.upgrade() {
-        data.listener.on_minimize(wnd.clone(), minimized);
-    }
+    ffi_callback((), || {
+        let data = unsafe { &*(data as *const EventListenerData) };
+        if let Some(wnd) = data.window.upgrade() {
+            data.listener.on_minimize(wnd.clone(), minimized);
+        }
+    });
 }
 
 extern "C" fn ev_on_closed_tp(_: *mut saucer_window, data: *mut c_void) {
-    let data = unsafe { &*(data as *const EventListenerData) };
-    if let Some(wnd) = data.window.upgrade() {
-        data.listener.on_closed(wnd.clone());
-    }
+    ffi_callback((), || {
+        let data = unsafe { &*(data as *const EventListenerData) };
+        if let Some(wnd) = data.window.upgrade() {
+            data.listener.on_closed(wnd.clone());
+        }
+    });
 }
 
 extern "C" fn ev_on_resize_tp(_: *mut saucer_window, width: u32, height: u32, data: *mut c_void) {
-    let data = unsafe { &*(data as *const EventListenerData) };
-    if let Some(wnd) = data.window.upgrade() {
-        data.listener.on_resize(wnd.clone(), width, height);
-    }
+    ffi_callback((), || {
+        let data = unsafe { &*(data as *const EventListenerData) };
+        if let Some(wnd) = data.window.upgrade() {
+            data.listener.on_resize(wnd.clone(), width, height);
+        }
+    });
 }
 
 extern "C" fn ev_on_focus_tp(_: *mut saucer_window, focused: bool, data: *mut c_void) {
-    let data = unsafe { &*(data as *const EventListenerData) };
-    if let Some(wnd) = data.window.upgrade() {
-        data.listener.on_focus(wnd.clone(), focused);
-    }
+    ffi_callback((), || {
+        let data = unsafe { &*(data as *const EventListenerData) };
+        if let Some(wnd) = data.window.upgrade() {
+            data.listener.on_focus(wnd.clone(), focused);
+        }
+    });
 }
 
 extern "C" fn ev_on_close_tp(_: *mut saucer_window, data: *mut c_void) -> saucer_policy {
-    let data = unsafe { &*(data as *const EventListenerData) };
-    if let Some(wnd) = data.window.upgrade() {
-        data.listener.on_close(wnd.clone()).into()
-    } else {
-        Policy::Allow.into()
-    }
+    ffi_callback(Policy::Allow.into(), || {
+        let data = unsafe { &*(data as *const EventListenerData) };
+        if let Some(wnd) = data.window.upgrade() {
+            data.listener.on_close(wnd.clone()).into()
+        } else {
+            Policy::Allow.into()
+        }
+    })
 }

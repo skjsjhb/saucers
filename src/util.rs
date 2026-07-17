@@ -1,5 +1,7 @@
 use std::ffi::CStr;
 use std::ffi::c_char;
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
 
 /// Copies the given C string into an owned [`String`]. Performs lossy UTF-8
 /// conversion if needed.
@@ -23,11 +25,7 @@ pub(crate) fn inflate_strings(mut src: &[u8]) -> Vec<String> {
 
     let mut out = Vec::new();
 
-    loop {
-        let Ok(f) = CStr::from_bytes_until_nul(src) else {
-            break;
-        };
-
+    while let Ok(f) = CStr::from_bytes_until_nul(src) {
         out.push(f.to_string_lossy().into_owned());
         let bc = f.count_bytes() + 1;
 
@@ -38,4 +36,40 @@ pub(crate) fn inflate_strings(mut src: &[u8]) -> Vec<String> {
     }
 
     out
+}
+
+/// Runs a Rust callback without allowing a panic to unwind across an FFI
+/// boundary.
+///
+/// The panic payload is intentionally leaked because dropping an arbitrary
+/// payload can itself panic. The panic hook still runs before the unwind is
+/// caught.
+pub(crate) fn ffi_callback<R>(fallback: R, callback: impl FnOnce() -> R) -> R {
+    match catch_unwind(AssertUnwindSafe(callback)) {
+        Ok(result) => result,
+        Err(payload) => {
+            std::mem::forget(payload);
+            fallback
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::panic::panic_any;
+
+    use super::ffi_callback;
+
+    struct PanicOnDrop;
+
+    impl Drop for PanicOnDrop {
+        fn drop(&mut self) { panic!("panic payload was dropped") }
+    }
+
+    #[test]
+    fn ffi_callback_contains_panics() {
+        assert_eq!(ffi_callback(0, || 1), 1);
+        assert_eq!(ffi_callback(0, || panic!("callback panicked")), 0);
+        assert_eq!(ffi_callback(0, || panic_any(PanicOnDrop)), 0);
+    }
 }

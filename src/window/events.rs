@@ -29,7 +29,5 @@ pub trait WindowEventListener {
     fn on_focus(&self, window: Window, focused: bool) {}
 
     /// Fired when the window is about to close.
-    fn on_close(&self, window: Window) -> Policy {
-        Policy::Allow
-    }
+    fn on_close(&self, window: Window) -> Policy { Policy::Allow }
 }

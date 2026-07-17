@@ -25,6 +25,7 @@ use crate::cleanup::CleanUpHolder;
 use crate::macros::load_range;
 use crate::policy::Policy;
 use crate::screen::Screen;
+use crate::util::ffi_callback;
 
 /// An unprotected owned app handle.
 struct RawApp {
@@ -320,22 +321,26 @@ impl RunCallbackData {
 extern "C" fn run_callback_tp(_: *mut saucer_application, data: *mut c_void) {
     // SAFETY: The method is invoked only once.
     let mut data = unsafe { Box::from_raw(data as *mut RunCallbackData) };
-    let start = data
-        .callback
-        .take()
-        .expect("start callback should be present");
-    start(data.app.clone(), &mut data.finish_listener);
+    ffi_callback((), || {
+        let start = data
+            .callback
+            .take()
+            .expect("start callback should be present");
+        start(data.app.clone(), &mut data.finish_listener);
+    });
     let _ = Box::into_raw(data); // It will be used in the finish callback
 }
 
 extern "C" fn finish_callback_tp(_: *mut saucer_application, data: *mut c_void) {
-    // SAFETY: The method will not be invoked before the run callback returns,
-    // making it safe to reclaim the ownership of the user data.
-    let data = unsafe { Box::from_raw(data as *mut RunCallbackData) };
+    ffi_callback((), || {
+        // SAFETY: The method will not be invoked before the run callback returns,
+        // making it safe to reclaim the ownership of the user data.
+        let data = unsafe { Box::from_raw(data as *mut RunCallbackData) };
 
-    if let Some(cb) = data.finish_listener.inner {
-        cb(data.app);
-    }
+        if let Some(cb) = data.finish_listener.inner {
+            cb(data.app);
+        }
+    });
 }
 
 type BoxedPostCallback = Box<dyn FnOnce(App) + Send + 'static>;
@@ -357,13 +362,15 @@ impl PostCallbackData {
 }
 
 extern "C" fn post_callback_tp(data: *mut c_void) {
-    // SAFETY: The method is invoked only once.
-    let data = unsafe { Box::from_raw(data as *mut PostCallbackData) };
-    if let Some(app) = data.app.upgrade() {
-        // Clone is not needed like webviews, as app is guaranteed to be valid when the
-        // event loop is running
-        (data.callback)(app);
-    }
+    ffi_callback((), || {
+        // SAFETY: The method is invoked only once.
+        let data = unsafe { Box::from_raw(data as *mut PostCallbackData) };
+        if let Some(app) = data.app.upgrade() {
+            // Clone is not needed like webviews, as app is guaranteed to be valid when the
+            // event loop is running
+            (data.callback)(app);
+        }
+    });
 }
 
 struct PostTimeoutCallbackData {
@@ -385,22 +392,24 @@ impl PostTimeoutCallbackData {
 }
 
 extern "C" fn post_timeout_callback_tp(data: *mut c_void) {
-    // SAFETY: The method is invoked only once.
-    let data = unsafe { Box::from_raw(data as *mut PostTimeoutCallbackData) };
-    let cb = {
-        let Ok(mut guard) = data.callback.try_lock() else {
-            return; // The dropper has acquired the lock, give up
+    ffi_callback((), || {
+        // SAFETY: The method is invoked only once.
+        let data = unsafe { Box::from_raw(data as *mut PostTimeoutCallbackData) };
+        let cb = {
+            let Ok(mut guard) = data.callback.try_lock() else {
+                return; // The dropper has acquired the lock, give up
+            };
+
+            match guard.take() {
+                Some(cb) => cb,
+                None => return,
+            }
         };
 
-        match guard.take() {
-            Some(cb) => cb,
-            None => return,
+        if let Some(app) = data.app.upgrade() {
+            cb(app);
         }
-    };
-
-    if let Some(app) = data.app.upgrade() {
-        cb(app);
-    }
+    });
 }
 
 struct EventListenerData<'a> {
@@ -413,12 +422,14 @@ impl<'a> EventListenerData<'a> {
 }
 
 extern "C" fn ev_on_quit_tp(_: *mut saucer_application, data: *mut c_void) -> saucer_policy {
-    // SAFETY: The borrow inside the data is guaranteed to be valid as long as the
-    // app runs.
-    let data = unsafe { &*(data as *const EventListenerData) };
-    if let Some(app) = data.app.upgrade() {
-        data.listener.on_quit(app).into()
-    } else {
-        Policy::Allow.into()
-    }
+    ffi_callback(Policy::Allow.into(), || {
+        // SAFETY: The borrow inside the data is guaranteed to be valid as long as the
+        // app runs.
+        let data = unsafe { &*(data as *const EventListenerData) };
+        if let Some(app) = data.app.upgrade() {
+            data.listener.on_quit(app).into()
+        } else {
+            Policy::Allow.into()
+        }
+    })
 }

@@ -26,9 +26,7 @@ pub trait WebviewEventListener {
     }
 
     /// Fired when the webview enters or leaves fullscreen.
-    fn on_fullscreen(&self, webview: Webview, is_fullscreen: bool) -> Policy {
-        Policy::Allow
-    }
+    fn on_fullscreen(&self, webview: Webview, is_fullscreen: bool) -> Policy { Policy::Allow }
 
     /// Fired when the DOM is ready.
     fn on_dom_ready(&self, webview: Webview) {}
@@ -37,9 +35,7 @@ pub trait WebviewEventListener {
     fn on_navigated(&self, webview: Webview, url: Url) {}
 
     /// Fired when the webview is about to navigate to a new URL.
-    fn on_navigate(&self, webview: Webview, nav: &Navigation) -> Policy {
-        Policy::Allow
-    }
+    fn on_navigate(&self, webview: Webview, nav: &Navigation) -> Policy { Policy::Allow }
 
     /// Fired when the webview sends a message.
     fn on_message(&self, webview: Webview, msg: Cow<str>) -> HandleStatus {
@@ -63,9 +59,7 @@ pub trait WebviewEventListener {
 #[allow(unused)] // Template
 pub trait WebviewSchemeHandler {
     /// Returns all schemes this handler intends to process.
-    fn schemes(&self) -> Vec<Cow<'static, str>> {
-        Vec::default()
-    }
+    fn schemes(&self) -> Vec<Cow<'static, str>> { Vec::default() }
 
     /// Handles a scheme request.
     ///

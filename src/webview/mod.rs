@@ -6,9 +6,9 @@ use std::borrow::Cow;
 use std::ffi::c_char;
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::sync::mpsc::Sender;
 use std::thread::ThreadId;
 
 pub use events::*;
@@ -28,6 +28,7 @@ use crate::scheme::Request;
 use crate::stash::Stash;
 use crate::status::HandleStatus;
 use crate::url::Url;
+use crate::util::ffi_callback;
 use crate::window::Window;
 
 /// An unprotected raw webview handle.
@@ -64,9 +65,7 @@ impl Drop for RawWebview {
 }
 
 impl RawWebview {
-    fn is_thread_safe(&self) -> bool {
-        std::thread::current().id() == self.host_tid
-    }
+    fn is_thread_safe(&self) -> bool { std::thread::current().id() == self.host_tid }
 }
 
 /// A webview handle.
@@ -175,19 +174,13 @@ impl Webview {
     }
 
     /// Checks whether devtools is open.
-    pub fn has_dev_tools(&self) -> bool {
-        unsafe { saucer_webview_dev_tools(self.as_ptr()) }
-    }
+    pub fn has_dev_tools(&self) -> bool { unsafe { saucer_webview_dev_tools(self.as_ptr()) } }
 
     /// Checks whether context menu is enabled.
-    pub fn has_context_menu(&self) -> bool {
-        unsafe { saucer_webview_context_menu(self.as_ptr()) }
-    }
+    pub fn has_context_menu(&self) -> bool { unsafe { saucer_webview_context_menu(self.as_ptr()) } }
 
     /// Checks whether dark mode is enforced.
-    pub fn is_force_dark(&self) -> bool {
-        unsafe { saucer_webview_force_dark(self.as_ptr()) }
-    }
+    pub fn is_force_dark(&self) -> bool { unsafe { saucer_webview_force_dark(self.as_ptr()) } }
 
     /// Gets the background color.
     pub fn background(&self) -> (u8, u8, u8, u8) {
@@ -265,9 +258,7 @@ impl Webview {
     }
 
     /// Reset webview bounds.
-    pub fn reset_bounds(&self) {
-        unsafe { saucer_webview_reset_bounds(self.as_ptr()) }
-    }
+    pub fn reset_bounds(&self) { unsafe { saucer_webview_reset_bounds(self.as_ptr()) } }
 
     /// Sets the webview bounds in the window.
     pub fn set_bounds(&self, x: i32, y: i32, w: i32, h: i32) {
@@ -275,19 +266,13 @@ impl Webview {
     }
 
     /// Navigates back.
-    pub fn back(&self) {
-        unsafe { saucer_webview_back(self.as_ptr()) }
-    }
+    pub fn back(&self) { unsafe { saucer_webview_back(self.as_ptr()) } }
 
     /// Navigates forward.
-    pub fn forward(&self) {
-        unsafe { saucer_webview_forward(self.as_ptr()) }
-    }
+    pub fn forward(&self) { unsafe { saucer_webview_forward(self.as_ptr()) } }
 
     /// Reloads the webview.
-    pub fn reload(&self) {
-        unsafe { saucer_webview_reload(self.as_ptr()) }
-    }
+    pub fn reload(&self) { unsafe { saucer_webview_reload(self.as_ptr()) } }
 
     /// Navigates to the embedded content specified by the path.
     pub fn serve(&self, path: impl Into<Vec<u8>>) {
@@ -307,9 +292,7 @@ impl Webview {
     }
 
     /// Removes all embedded items.
-    pub fn unembed_all(&self) {
-        unsafe { saucer_webview_unembed_all(self.as_ptr()) }
-    }
+    pub fn unembed_all(&self) { unsafe { saucer_webview_unembed_all(self.as_ptr()) } }
 
     /// Removes the embedded item at the given path.
     pub fn unembed(&self, path: impl Into<Vec<u8>>) {
@@ -337,9 +320,7 @@ impl Webview {
     }
 
     /// Removes all injected scripts.
-    pub fn uninject_all(&self) {
-        unsafe { saucer_webview_uninject_all(self.as_ptr()) }
-    }
+    pub fn uninject_all(&self) { unsafe { saucer_webview_uninject_all(self.as_ptr()) } }
 
     /// Removes injected script by ID.
     pub fn uninject(&self, id: ScriptId) {
@@ -347,18 +328,12 @@ impl Webview {
     }
 
     /// Gets the parent window.
-    pub fn window(&self) -> Window {
-        self.0.window.clone()
-    }
+    pub fn window(&self) -> Window { self.0.window.clone() }
 
     /// Gets a weak [`WebviewRef`].
-    pub fn downgrade(&self) -> WebviewRef {
-        WebviewRef(Arc::downgrade(&self.0))
-    }
+    pub fn downgrade(&self) -> WebviewRef { WebviewRef(Arc::downgrade(&self.0)) }
 
-    pub(crate) fn as_ptr(&self) -> *mut saucer_webview {
-        self.0.inner.as_ptr()
-    }
+    pub(crate) fn as_ptr(&self) -> *mut saucer_webview { self.0.inner.as_ptr() }
 }
 
 /// A weak webview handle.
@@ -370,9 +345,7 @@ pub struct WebviewRef(Weak<RawWebview>);
 
 impl WebviewRef {
     /// Tries to upgrade to a strong handle.
-    pub fn upgrade(&self) -> Option<Webview> {
-        Some(Webview(self.0.upgrade()?))
-    }
+    pub fn upgrade(&self) -> Option<Webview> { Some(Webview(self.0.upgrade()?)) }
 }
 
 pub(crate) struct SchemeHandlerData {
@@ -408,16 +381,18 @@ extern "C" fn ev_on_permission_tp(
     req: *mut saucer_permission_request,
     data: *mut c_void,
 ) -> saucer_status {
-    let req = unsafe { PermissionRequest::from_ptr(saucer_permission_request_copy(req)) };
-    let data = unsafe { &*(data as *const EventListenerData) };
+    ffi_callback(HandleStatus::Unhandled.into(), || {
+        let req = unsafe { PermissionRequest::from_ptr(saucer_permission_request_copy(req)) };
+        let data = unsafe { &*(data as *const EventListenerData) };
 
-    let ret = if let Some(w) = data.webview.upgrade() {
-        data.listener.on_permission(w.clone(), req)
-    } else {
-        HandleStatus::Unhandled
-    };
+        let ret = if let Some(w) = data.webview.upgrade() {
+            data.listener.on_permission(w.clone(), req)
+        } else {
+            HandleStatus::Unhandled
+        };
 
-    ret.into()
+        ret.into()
+    })
 }
 
 extern "C" fn ev_on_fullscreen_tp(
@@ -425,34 +400,40 @@ extern "C" fn ev_on_fullscreen_tp(
     is_fullscreen: bool,
     data: *mut c_void,
 ) -> saucer_policy {
-    let data = unsafe { &*(data as *const EventListenerData) };
+    ffi_callback(Policy::Allow.into(), || {
+        let data = unsafe { &*(data as *const EventListenerData) };
 
-    let ret = if let Some(w) = data.webview.upgrade() {
-        data.listener.on_fullscreen(w.clone(), is_fullscreen)
-    } else {
-        Policy::Allow
-    };
+        let ret = if let Some(w) = data.webview.upgrade() {
+            data.listener.on_fullscreen(w.clone(), is_fullscreen)
+        } else {
+            Policy::Allow
+        };
 
-    ret.into()
+        ret.into()
+    })
 }
 
 extern "C" fn ev_on_dom_ready_tp(_: *mut saucer_webview, data: *mut c_void) {
-    let data = unsafe { &*(data as *const EventListenerData) };
+    ffi_callback((), || {
+        let data = unsafe { &*(data as *const EventListenerData) };
 
-    if let Some(w) = data.webview.upgrade() {
-        data.listener.on_dom_ready(w.clone());
-    }
+        if let Some(w) = data.webview.upgrade() {
+            data.listener.on_dom_ready(w.clone());
+        }
+    });
 }
 
 extern "C" fn ev_on_navigated_tp(_: *mut saucer_webview, url: *mut saucer_url, data: *mut c_void) {
-    let url = unsafe {
-        Url::from_ptr(saucer_url_copy(url), -1).expect("navigation target URL should exist")
-    };
-    let data = unsafe { &*(data as *const EventListenerData) };
+    ffi_callback((), || {
+        let url = unsafe {
+            Url::from_ptr(saucer_url_copy(url), -1).expect("navigation target URL should exist")
+        };
+        let data = unsafe { &*(data as *const EventListenerData) };
 
-    if let Some(w) = data.webview.upgrade() {
-        data.listener.on_navigated(w.clone(), url);
-    }
+        if let Some(w) = data.webview.upgrade() {
+            data.listener.on_navigated(w.clone(), url);
+        }
+    });
 }
 
 extern "C" fn ev_on_navigate_tp(
@@ -460,18 +441,20 @@ extern "C" fn ev_on_navigate_tp(
     nav: *mut saucer_navigation,
     data: *mut c_void,
 ) -> saucer_policy {
-    let nav = unsafe { Navigation::from_ptr(nav) }; // SAFETY: It can't be moved out
+    ffi_callback(Policy::Allow.into(), || {
+        let nav = unsafe { Navigation::from_ptr(nav) }; // SAFETY: It can't be moved out
 
-    let data = unsafe { &*(data as *const EventListenerData) };
+        let data = unsafe { &*(data as *const EventListenerData) };
 
-    let ret = if let Some(w) = data.webview.upgrade() {
-        data.listener.on_navigate(w.clone(), &nav)
-    } else {
-        Policy::Allow
-    };
+        let ret = if let Some(w) = data.webview.upgrade() {
+            data.listener.on_navigate(w.clone(), &nav)
+        } else {
+            Policy::Allow
+        };
 
-    let _ = nav; // Ensure it's not moved
-    ret.into()
+        let _ = nav; // Ensure it's not moved
+        ret.into()
+    })
 }
 
 extern "C" fn ev_on_message_tp(
@@ -480,27 +463,32 @@ extern "C" fn ev_on_message_tp(
     size: usize,
     data: *mut c_void,
 ) -> saucer_status {
-    let s = unsafe { std::slice::from_raw_parts_mut(msg as *mut u8, size) };
-    let s = String::from_utf8_lossy(s);
+    ffi_callback(HandleStatus::Unhandled.into(), || {
+        let s = unsafe { std::slice::from_raw_parts_mut(msg as *mut u8, size) };
+        let s = String::from_utf8_lossy(s);
 
-    let data = unsafe { &*(data as *const EventListenerData) };
+        let data = unsafe { &*(data as *const EventListenerData) };
 
-    let ret = if let Some(w) = data.webview.upgrade() {
-        data.listener.on_message(w.clone(), s)
-    } else {
-        HandleStatus::Unhandled
-    };
+        let ret = if let Some(w) = data.webview.upgrade() {
+            data.listener.on_message(w.clone(), s)
+        } else {
+            HandleStatus::Unhandled
+        };
 
-    ret.into()
+        ret.into()
+    })
 }
 
 extern "C" fn ev_on_request_tp(_: *mut saucer_webview, req: *mut saucer_url, data: *mut c_void) {
-    let url = unsafe { Url::from_ptr(saucer_url_copy(req), -1).expect("request URL should exist") };
-    let data = unsafe { &*(data as *const EventListenerData) };
+    ffi_callback((), || {
+        let url =
+            unsafe { Url::from_ptr(saucer_url_copy(req), -1).expect("request URL should exist") };
+        let data = unsafe { &*(data as *const EventListenerData) };
 
-    if let Some(w) = data.webview.upgrade() {
-        data.listener.on_request(w.clone(), url);
-    }
+        if let Some(w) = data.webview.upgrade() {
+            data.listener.on_request(w.clone(), url);
+        }
+    });
 }
 
 extern "C" fn ev_on_favicon_tp(
@@ -508,12 +496,14 @@ extern "C" fn ev_on_favicon_tp(
     favicon: *mut saucer_icon,
     data: *mut c_void,
 ) {
-    let icon = unsafe { Icon::from_ptr(saucer_icon_copy(favicon)) };
-    let data = unsafe { &*(data as *const EventListenerData) };
+    ffi_callback((), || {
+        let icon = unsafe { Icon::from_ptr(saucer_icon_copy(favicon)) };
+        let data = unsafe { &*(data as *const EventListenerData) };
 
-    if let Some(w) = data.webview.upgrade() {
-        data.listener.on_favicon(w.clone(), icon);
-    }
+        if let Some(w) = data.webview.upgrade() {
+            data.listener.on_favicon(w.clone(), icon);
+        }
+    });
 }
 
 extern "C" fn ev_on_title_tp(
@@ -522,22 +512,26 @@ extern "C" fn ev_on_title_tp(
     size: usize,
     data: *mut c_void,
 ) {
-    let s = unsafe { std::slice::from_raw_parts_mut(title as *mut u8, size) };
-    let s = String::from_utf8_lossy(s).into_owned();
+    ffi_callback((), || {
+        let s = unsafe { std::slice::from_raw_parts_mut(title as *mut u8, size) };
+        let s = String::from_utf8_lossy(s).into_owned();
 
-    let data = unsafe { &*(data as *const EventListenerData) };
+        let data = unsafe { &*(data as *const EventListenerData) };
 
-    if let Some(w) = data.webview.upgrade() {
-        data.listener.on_title(w.clone(), s);
-    }
+        if let Some(w) = data.webview.upgrade() {
+            data.listener.on_title(w.clone(), s);
+        }
+    });
 }
 
 extern "C" fn ev_on_load_tp(_: *mut saucer_webview, state: saucer_state, data: *mut c_void) {
-    let data = unsafe { &*(data as *const EventListenerData) };
+    ffi_callback((), || {
+        let data = unsafe { &*(data as *const EventListenerData) };
 
-    if let Some(w) = data.webview.upgrade() {
-        data.listener.on_load(w.clone(), state.into());
-    }
+        if let Some(w) = data.webview.upgrade() {
+            data.listener.on_load(w.clone(), state.into());
+        }
+    });
 }
 
 extern "C" fn handle_scheme_tp(
@@ -545,14 +539,16 @@ extern "C" fn handle_scheme_tp(
     exc: *mut saucer_scheme_executor,
     data: *mut c_void,
 ) {
-    let data = unsafe { &*(data as *mut SchemeHandlerData) };
+    ffi_callback((), || {
+        let data = unsafe { &*(data as *mut SchemeHandlerData) };
 
-    // Both the request and the executor are borrowed (via auto conversion in C++)
+        // Both the request and the executor are borrowed (via auto conversion in C++)
 
-    let req = unsafe { Request::from_ptr(saucer_scheme_request_copy(req)) };
-    let exc = unsafe { Executor::from_ptr(saucer_scheme_executor_copy(exc)) };
+        let req = unsafe { Request::from_ptr(saucer_scheme_request_copy(req)) };
+        let exc = unsafe { Executor::from_ptr(saucer_scheme_executor_copy(exc)) };
 
-    if let Some(w) = data.webview.upgrade() {
-        data.handler.handle_scheme(w.clone(), req, exc)
-    }
+        if let Some(w) = data.webview.upgrade() {
+            data.handler.handle_scheme(w.clone(), req, exc)
+        }
+    });
 }

@@ -24,9 +24,7 @@ pub(crate) struct RawWebviewOptions {
 }
 
 impl Drop for RawWebviewOptions {
-    fn drop(&mut self) {
-        unsafe { saucer_webview_options_free(self.as_ptr()) }
-    }
+    fn drop(&mut self) { unsafe { saucer_webview_options_free(self.as_ptr()) } }
 }
 
 impl RawWebviewOptions {
@@ -64,7 +62,5 @@ impl RawWebviewOptions {
         Self { inner }
     }
 
-    pub(crate) fn as_ptr(&self) -> *mut saucer_webview_options {
-        self.inner.as_ptr()
-    }
+    pub(crate) fn as_ptr(&self) -> *mut saucer_webview_options { self.inner.as_ptr() }
 }

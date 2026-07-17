@@ -125,9 +125,11 @@ struct LazyCallbackData {
 
 #[cfg(false)]
 extern "C" fn stash_lazy_tp(data: *mut std::ffi::c_void) -> *mut saucer_stash {
-    let bb = unsafe { Box::from_raw(data as *mut LazyCallbackData) };
-    // The C library will free the stash object, so only the handle is dropped.
-    let mut st = (bb.callback)();
-    st.leak = true;
-    st.as_ptr()
+    crate::util::ffi_callback(std::ptr::null_mut(), || {
+        let bb = unsafe { Box::from_raw(data as *mut LazyCallbackData) };
+        // The C library will free the stash object, so only the handle is dropped.
+        let mut st = (bb.callback)();
+        st.leak = true;
+        st.as_ptr()
+    })
 }
