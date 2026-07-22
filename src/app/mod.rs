@@ -80,7 +80,7 @@ impl RawApp {
 /// This struct never owns an app handle. Instead, it creates one on-demand when
 /// starting the event loop, and collects them before exiting.
 pub struct AppManager {
-    raw_opt: RawAppOptions,
+    opt: Option<AppOptions>,
     drop_sender: Option<Sender<CleanUpHolder>>,
     receiver: Receiver<CleanUpHolder>,
     // App needs to be destroyed after all other handles, thus a dedicated channel
@@ -113,7 +113,7 @@ impl AppManager {
         let (sender, receiver) = std::sync::mpsc::channel();
         let (app_sender, app_receiver) = std::sync::mpsc::channel();
         Self {
-            raw_opt: RawAppOptions::new(opt),
+            opt: Some(opt),
             drop_sender: Some(sender),
             receiver,
             app_drop_sender: Some(app_sender),
@@ -161,7 +161,8 @@ impl AppManager {
         let mut ex = -1;
 
         // SAFETY: The options are kept valid until the app quits.
-        let ptr = unsafe { saucer_application_new(self.raw_opt.as_ptr(), &raw mut ex) };
+        let raw_opt = RawAppOptions::new(self.opt.take().unwrap());
+        let ptr = unsafe { saucer_application_new(raw_opt.as_ptr(), &raw mut ex) };
 
         let app = NonNull::new(ptr).ok_or(crate::error::Error::Saucer(ex))?;
 
@@ -197,6 +198,8 @@ impl AppManager {
 
         // App handles are invalid here, yet AppRef won't be able to upgrade anyway.
         unsafe { drop(Box::from_raw(data)) };
+
+        drop(raw_opt); // Options should be dropped last
 
         Ok(())
     }
