@@ -155,6 +155,9 @@ impl AppManager {
     where
         F: FinishRoutine + 'static,
     {
+        #[cfg(target_os = "macos")]
+        objc2::MainThreadMarker::new().expect("event loop must be started from the main thread");
+
         let mut ex = -1;
 
         // SAFETY: The options are kept valid until the app quits.

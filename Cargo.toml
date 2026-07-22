@@ -18,6 +18,9 @@ exclude = [
 thiserror = "2.0.18"
 saucer-sys = { git = "https://github.com/skarl3t/saucer-sys", rev = "e26b5bd" }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+
 [build-dependencies]
 build-target = "0.8.0"
 
