@@ -42,10 +42,7 @@ pub fn version() -> &'static str {
     unsafe { CStr::from_ptr(saucer_version()).to_str().unwrap_or("") }
 }
 
-/// A ZST for ignoring all events.
-pub struct NoOp;
-
-impl AppEventListener for NoOp {}
-impl WindowEventListener for NoOp {}
-impl WebviewEventListener for NoOp {}
-impl WebviewSchemeHandler for NoOp {}
+impl AppEventListener for () {}
+impl WindowEventListener for () {}
+impl WebviewEventListener for () {}
+impl WebviewSchemeHandler for () {}

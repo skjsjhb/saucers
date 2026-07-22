@@ -1,4 +1,3 @@
-use saucers::NoOp;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::webview::Webview;
@@ -12,8 +11,8 @@ fn main() {
     let app = AppManager::new(AppOptions::new_with_id("title"));
 
     app.run(
-        |app, fin| {
-            let window = Window::new(&app, NoOp).unwrap();
+        |app| {
+            let window = Window::new(&app, ()).unwrap();
 
             window.set_size((1152, 648));
             window.set_title("Super Secret Title");
@@ -27,13 +26,13 @@ fn main() {
                 }
             }
 
-            let webview = Webview::new(WebviewOptions::default(), window, WebviewEv, NoOp).unwrap();
+            let webview = Webview::new(WebviewOptions::default(), window, WebviewEv, ()).unwrap();
 
             webview.set_html("<title>You didn't see anything!</title>");
 
-            fin.set(|_| drop(webview));
+            webview
         },
-        NoOp,
+        (),
     )
     .unwrap();
 }

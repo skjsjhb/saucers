@@ -1,4 +1,3 @@
-use saucers::NoOp;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::stash::Stash;
@@ -16,13 +15,13 @@ fn main() {
     let app = AppManager::new(AppOptions::new_with_id("embed"));
 
     app.run(
-        |app, fin| {
-            let window = Window::new(&app, NoOp).unwrap();
+        |app| {
+            let window = Window::new(&app, ()).unwrap();
 
             window.set_size((1152, 648));
             window.show();
 
-            let webview = Webview::new(WebviewOptions::default(), window, NoOp, NoOp).unwrap();
+            let webview = Webview::new(WebviewOptions::default(), window, (), ()).unwrap();
 
             // Add embedded files using paths, contents and MIME types.
             webview.embed("/index.html", Stash::new_view(HTML_FILE), "text/html");
@@ -31,9 +30,9 @@ fn main() {
             // Navigates to the embedded file.
             webview.serve("/index.html");
 
-            fin.set(|_| drop(webview));
+            webview
         },
-        NoOp,
+        (),
     )
     .unwrap();
 }

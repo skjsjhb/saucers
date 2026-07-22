@@ -1,7 +1,6 @@
 use std::cell::Cell;
 use std::panic::AssertUnwindSafe;
 
-use saucers::NoOp;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::policy::Policy;
@@ -14,7 +13,7 @@ fn main() {
     let app = AppManager::new(AppOptions::new_with_id("event"));
 
     app.run(
-        |app, fin| {
+        |app| {
             struct WindowEv {
                 allow_close: AssertUnwindSafe<Cell<bool>>,
             }
@@ -40,9 +39,9 @@ fn main() {
             window.set_size((1152, 648));
             window.show();
 
-            fin.set(|_| drop(window));
+            window
         },
-        NoOp,
+        (),
     )
     .unwrap();
 }

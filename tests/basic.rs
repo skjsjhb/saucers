@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use libtest_mimic::Arguments;
 use libtest_mimic::Trial;
-use saucers::NoOp;
 use saucers::app::App;
 use saucers::app::AppEventListener;
 use saucers::app::AppManager;
@@ -145,8 +144,8 @@ fn app_lifecycle() {
     app.run(
         {
             let counter = counter.clone();
-            |app, fin| {
-                let wnd = Window::new(&app, NoOp).unwrap();
+            |app| {
+                let wnd = Window::new(&app, ()).unwrap();
                 wnd.show();
 
                 let wv =
@@ -155,10 +154,10 @@ fn app_lifecycle() {
                 wv.inject("window._injected = true;", ScriptTime::Creation, true, true);
                 wv.set_url_str(SCHEME_URL);
 
-                fin.set(move |_| {
+                move |_| {
                     drop(wv);
                     drop(counter);
-                });
+                }
             }
         },
         trace_app,

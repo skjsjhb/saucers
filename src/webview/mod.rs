@@ -73,9 +73,10 @@ impl RawWebview {
 ///
 /// Webviews are shared and the underlying browser is only closed after the last
 /// handle is dropped. When created inside the app start callback, it should be
-/// moved into the [`crate::app::FinishListener`] so that it don't get closed
-/// immediately. Also, a webview captures the window it lives in, making it no
-/// longer necessary to keep the window handle separately.
+/// moved into the [`crate::app::FinishListener`] (or get returned directly) so
+/// that it don't get closed immediately. Also, a webview captures the window it
+/// lives in, making it no longer necessary to keep the window handle
+/// separately.
 #[derive(Clone)]
 pub struct Webview(Arc<RawWebview>);
 

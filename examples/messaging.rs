@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 
-use saucers::NoOp;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::scheme::register_scheme;
@@ -20,8 +19,8 @@ fn main() {
     let app = AppManager::new(AppOptions::new_with_id("messaging"));
 
     app.run(
-        |app, fin| {
-            let window = Window::new(&app, NoOp).unwrap();
+        |app| {
+            let window = Window::new(&app, ()).unwrap();
 
             window.set_size((1152, 648));
             window.show();
@@ -38,7 +37,7 @@ fn main() {
                 }
             }
 
-            let webview = Webview::new(WebviewOptions::default(), window, WebviewEv, NoOp).unwrap();
+            let webview = Webview::new(WebviewOptions::default(), window, WebviewEv, ()).unwrap();
 
             // Browser scripts are not injected until a navigation (URL or HTML). Scripts
             // enable `window.saucer.internal.message` so that you have a
@@ -57,9 +56,9 @@ fn main() {
                 "#,
             );
 
-            fin.set(|_| drop(webview));
+            webview
         },
-        NoOp,
+        (),
     )
     .unwrap();
 }

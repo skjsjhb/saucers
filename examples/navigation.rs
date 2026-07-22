@@ -3,7 +3,6 @@ use std::panic::AssertUnwindSafe;
 use std::rc::Rc;
 use std::rc::Weak;
 
-use saucers::NoOp;
 use saucers::app::App;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
@@ -23,7 +22,7 @@ fn main() {
     let app = AppManager::new(AppOptions::new_with_id("navigation"));
 
     app.run(
-        |app, fin| {
+        |app| {
             let webviews = AssertUnwindSafe(Rc::new(RefCell::new(Vec::new())));
 
             struct WebviewEv {
@@ -50,12 +49,12 @@ fn main() {
             impl WebviewEventListener for WebviewEv {
                 fn on_navigate(&self, _webview: Webview, nav: &Navigation) -> Policy {
                     if nav.is_new_window() && nav.is_user_initiated() {
-                        let new_window = Window::new(&self.app, NoOp).unwrap();
+                        let new_window = Window::new(&self.app, ()).unwrap();
                         new_window.set_size((1152, 648));
                         new_window.show();
 
                         let new_webview =
-                            Webview::new(WebviewOptions::default(), new_window, self.clone(), NoOp)
+                            Webview::new(WebviewOptions::default(), new_window, self.clone(), ())
                                 .unwrap();
 
                         new_webview.set_url(nav.url());
@@ -70,22 +69,21 @@ fn main() {
                 }
             }
 
-            let window = Window::new(&app, NoOp).unwrap();
+            let window = Window::new(&app, ()).unwrap();
 
             window.set_size((1152, 648));
             window.show();
 
-            let webview =
-                Webview::new(WebviewOptions::default(), window, webview_ev, NoOp).unwrap();
+            let webview = Webview::new(WebviewOptions::default(), window, webview_ev, ()).unwrap();
 
             webview.set_html("<a target=\"_new\" href=\"about:blank\">Link</a>");
 
             webviews.borrow_mut().push(webview);
 
             // Drop the webviews or the app will block infinitely.
-            fin.set(|_| drop(webviews));
+            (webviews,)
         },
-        NoOp,
+        (),
     )
     .unwrap();
 }

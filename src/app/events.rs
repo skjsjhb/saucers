@@ -10,7 +10,7 @@ pub trait AppEventListener: RefUnwindSafe {
     /// Note that this event may be fired multiple times event if it's
     /// [`Policy::Allow`]ed, as it's actually fired inside [`App::quit`].
     /// This also means that [`App::quit`] must not be called
-    /// in this listener. Consider using [`crate::app::FinishListener`] if you
+    /// in this listener. Consider using [`crate::app::FinishRoutine`] if you
     /// need a one-time callback.
     fn on_quit(&self, _app: App) -> Policy { Policy::Allow }
 }

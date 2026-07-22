@@ -6,7 +6,6 @@ mod events;
 mod options;
 
 use std::ffi::c_void;
-use std::panic::AssertUnwindSafe;
 use std::panic::UnwindSafe;
 use std::ptr::NonNull;
 use std::ptr::null_mut;
@@ -29,6 +28,8 @@ use crate::macros::load_range;
 use crate::policy::Policy;
 use crate::screen::Screen;
 use crate::util::ffi_callback;
+use crate::webview::Webview;
+use crate::window::Window;
 
 /// An unprotected owned app handle.
 struct RawApp {
@@ -121,16 +122,16 @@ impl AppManager {
     }
 
     /// Runs the app with specified the event handlers. Invokes the given
-    /// callback once when entering the event loop.
+    /// callback (the *start callback*) once when entering the event loop.
+    ///
+    /// The start callback may return a [`FinishRoutine`], which may specify a
+    /// desired action when the event loop terminates. [`Webview`], [`Window`]
+    /// and `(T,)` simply drop themselves, while closures will be invoked.
     ///
     /// The thread that this method is called will be used as the event thread,
     /// that is, the thread that runs the event loop. Specifically, this
     /// method must only be called on the starting thread on macOS due to
     /// limitations of Cocoa.
-    ///
-    /// A mutable reference to [`FinishListener`] is provided to the callback,
-    /// which can be used to set listeners that will be called once the
-    /// event loop stops.
     ///
     /// In the C++ API, the callback is designed for holding windows and
     /// webviews so that they don't "escape" the app event cycle scope. It
@@ -138,20 +139,22 @@ impl AppManager {
     /// currently have no plan to support async parts (which will more or less
     /// involve pulling in some crates for async), handles created in the
     /// callback will be dropped when it exits, which will normally destroy
-    /// the windows. There are currently two workarounds:
+    /// the windows. Handles can instead be kept alive by either:
     ///
     /// 1. Store the handles at a place which outlives the event loop lifecycle.
-    /// 2. Move the handles into the finish callback and drop them there.
+    /// 2. Return the handles as the finish routine, or move them into one.
     ///
-    /// Also note that any handle created in the start callback shall live
-    /// within it (i.e. get dropped at least not later than the finish
-    /// callback). Failing to do so would lead to a direct deadlock, as this
-    /// method will try to join all handles before returning.
-    pub fn run(
+    /// Any handle created in the start callback must be dropped no later than
+    /// its finish routine. Failing to do so would lead to a deadlock, as this
+    /// method tries to join all handles before returning.
+    pub fn run<F>(
         mut self,
-        start: impl FnOnce(App, &mut FinishListener) + UnwindSafe + 'static,
+        start: impl FnOnce(App) -> F + UnwindSafe + 'static,
         event_listener: impl AppEventListener,
-    ) -> crate::error::Result<()> {
+    ) -> crate::error::Result<()>
+    where
+        F: FinishRoutine + 'static,
+    {
         let mut ex = -1;
 
         // SAFETY: The options are kept valid until the app quits.
@@ -290,32 +293,50 @@ impl AppRef {
     pub fn upgrade(&self) -> Option<App> { Some(App(self.0.upgrade()?)) }
 }
 
-/// A struct that holds a listener which can be invoked when the app quits.
-#[derive(Default)]
-pub struct FinishListener {
-    inner: Option<Box<dyn FnOnce(App) + UnwindSafe + 'static>>,
+/// A one-shot routine invoked after the app event loop stops.
+pub trait FinishRoutine: UnwindSafe {
+    /// Runs this routine once after the event loop stops.
+    ///
+    /// [`Box`] receiver is used as this trait is subject to type erasing so it
+    /// can be carried across FFI boundary.
+    #[allow(unused)]
+    fn on_finish(self: Box<Self>, app: App) {}
 }
 
-impl FinishListener {
-    /// Sets the finish callback. Replaces it if already set.
-    pub fn set(&mut self, listener: impl FnOnce(App) + UnwindSafe + 'static) {
-        self.inner = Some(Box::new(listener));
-    }
+/// Returning a closure as [`FinishRoutine`] will invoke it upon stopping.
+impl<F> FinishRoutine for F
+where F: FnOnce(App) + UnwindSafe
+{
+    fn on_finish(self: Box<Self>, app: App) { self(app); }
 }
 
-type BoxedRunCallback = Box<dyn FnOnce(App, &mut FinishListener) + UnwindSafe + 'static>;
+// Capturing nothing from the start callback is almost never desired.
+// impl FinishRoutine for () {}
+
+/// Allows you to return a [`Webview`] directly from start callback to keep it.
+impl FinishRoutine for Webview {}
+
+/// Allows you to return a [`Webview`] directly from start callback to keep it.
+impl FinishRoutine for Window {}
+
+/// Allows you to keep an arbitrary value until the event loop quits.
+impl<T: UnwindSafe> FinishRoutine for (T,) {}
+
+type BoxedFinishRoutine = Box<dyn FinishRoutine + 'static>;
+type BoxedRunCallback = Box<dyn FnOnce(App) -> BoxedFinishRoutine + UnwindSafe + 'static>;
 
 struct RunCallbackData {
     callback: Option<BoxedRunCallback>,
-    finish_listener: FinishListener,
-    app: App, // This doesn't need to be weak as start routine will always be called
+    finish_routine: Option<BoxedFinishRoutine>,
+    app: App, // This doesn't need to be weak as start callback will always be called
 }
 
 impl RunCallbackData {
-    fn new(cb: impl FnOnce(App, &mut FinishListener) + UnwindSafe + 'static, app: App) -> Self {
+    fn new<R>(cb: impl FnOnce(App) -> R + UnwindSafe + 'static, app: App) -> Self
+    where R: FinishRoutine + 'static {
         Self {
-            callback: Some(Box::new(cb)),
-            finish_listener: FinishListener::default(),
+            callback: Some(Box::new(move |app| Box::new(cb(app)))),
+            finish_routine: None,
             app,
         }
     }
@@ -328,11 +349,7 @@ extern "C" fn run_callback_tp(_: *mut saucer_application, data: *mut c_void) {
     let mut data = unsafe { Box::from_raw(data as *mut RunCallbackData) };
     if let Some(start) = data.callback.take() {
         let app = data.app.clone();
-        // Unwinding would not break FinishListener
-        let mut fin = AssertUnwindSafe(&mut data.finish_listener);
-        ffi_callback((), move || {
-            start(app, *fin);
-        });
+        data.finish_routine = ffi_callback(None, move || Some(start(app)));
     }
     let _ = Box::into_raw(data); // It will be used in the finish callback
 }
@@ -343,8 +360,8 @@ extern "C" fn finish_callback_tp(_: *mut saucer_application, data: *mut c_void) 
         // making it safe to reclaim the ownership of the user data.
         let data = unsafe { Box::from_raw(data as *mut RunCallbackData) };
 
-        if let Some(cb) = data.finish_listener.inner {
-            cb(data.app);
+        if let Some(routine) = data.finish_routine {
+            routine.on_finish(data.app);
         }
     });
 }

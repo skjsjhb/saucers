@@ -1,4 +1,3 @@
-use saucers::NoOp;
 use saucers::app::AppManager;
 use saucers::app::AppOptions;
 use saucers::desktop::Desktop;
@@ -10,7 +9,7 @@ fn main() {
     let app = AppManager::new(AppOptions::new_with_id("desktop"));
 
     app.run(
-        |app, _| {
+        |app| {
             let dsk = Desktop::new(&app);
             match dsk.pick_file(&PickerOptions::new()) {
                 Ok(fp) => println!("Selected file path: {fp}"),
@@ -18,8 +17,10 @@ fn main() {
             }
 
             app.quit();
+
+            ((),) // () cannot be used as a finish routine
         },
-        NoOp,
+        (),
     )
     .unwrap();
 }
